@@ -13,5 +13,3 @@ sqlx = { version = "0.8.2", features = [
     "postgres",
 ] }
 tokio = { version = "1", features = ["full"] }
-tracing = "0.1.40"
-tracing-actix-web = "0.7.15"

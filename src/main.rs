@@ -1,10 +1,9 @@
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{get, middleware::Logger, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use redis::Client as RedisClient;
 use serde_json::json;
 use sqlx::PgPool;
 use std::env;
-use tracing::{error, info};
 
 async fn index() -> impl Responder {
     // Use the INDEX_RESPONSE environment variable if it exists, otherwise use "Welcome"
@@ -20,11 +19,11 @@ async fn health(
     // Check PostgreSQL connection
     let db_status = match sqlx::query("SELECT 1").execute(db_pool.get_ref()).await {
         Ok(_) => {
-            info!("PostgreSQL is healthy");
+            println!("PostgreSQL is healthy");
             "ok"
         }
         Err(err) => {
-            error!("PostgreSQL health check failed: {:?}", err);
+            eprintln!("PostgreSQL health check failed: {:?}", err);
             "error"
         }
     };
@@ -35,25 +34,23 @@ async fn health(
             // Attempt a simple PING command
             match redis::cmd("PING").query_async::<String>(&mut con).await {
                 Ok(_) => {
-                    info!("Redis is healthy");
+                    println!("Redis is healthy");
                     "ok"
                 }
                 Err(err) => {
-                    error!("Redis PING failed: {:?}", err);
+                    eprintln!("Redis PING failed: {:?}", err);
                     "error"
                 }
             }
         }
         Err(err) => {
-            error!("Redis health check failed: {:?}", err);
+            eprintln!("Redis health check failed: {:?}", err);
             "error"
         }
     };
 
-    let response = env::var("INDEX_RESPONSE").unwrap_or_else(|_| "health".to_string());
     let health_response = json!({
         "status": "ok",
-        "server": response,
         "postgres": db_status,
         "redis": redis_status
     });
@@ -83,6 +80,7 @@ async fn main() -> std::io::Result<()> {
     // Start the Actix Web server
     HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default())
             .app_data(web::Data::new(db_pool.clone()))
             .app_data(web::Data::new(redis_client.clone()))
             .route("/", web::get().to(index))
