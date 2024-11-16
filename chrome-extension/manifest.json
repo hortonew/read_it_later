@@ -1,0 +1,17 @@
+{
+    "manifest_version": 3,
+    "name": "URL Poster",
+    "version": "1.0",
+    "description": "Send the current tab's URL to a server.",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "http://192.168.1.56/"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_popup": "popup.html"
+    }
+}

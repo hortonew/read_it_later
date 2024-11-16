@@ -1,7 +1,7 @@
+use actix_cors::Cors;
 use actix_web::{middleware::Logger, App, HttpServer};
 use dotenv::dotenv;
 use std::env;
-
 mod services;
 use services::{api, caching, database};
 
@@ -32,6 +32,12 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
+            .wrap(
+                Cors::default()
+                    .allow_any_origin() // Allow any origin
+                    .allow_any_method() // Allow any HTTP method
+                    .allow_any_header(), // Allow any header
+            )
             .app_data(actix_web::web::Data::new(db_pool.clone()))
             .app_data(actix_web::web::Data::new(redis_client.clone()))
             .configure(api::configure_routes) // API routes

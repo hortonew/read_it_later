@@ -28,7 +28,7 @@ pub async fn create_urls_table(db_pool: &PgPool) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn calculate_url_hash(url: &str) -> String {
+fn calculate_url_hash(url: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(url);
     format!("{:x}", hasher.finalize()) // Convert to a hexadecimal string
@@ -48,10 +48,10 @@ pub async fn insert_url(db_pool: &PgPool, url: &str) -> Result<(), Error> {
 
 #[derive(FromRow, Serialize)]
 pub struct Url {
-    id: i32,
-    datetime: chrono::NaiveDateTime,
-    url: String,
-    url_hash: String,
+    pub id: i32,
+    pub datetime: chrono::NaiveDateTime,
+    pub url: String,
+    pub url_hash: String,
 }
 
 pub async fn get_all_urls(db_pool: &PgPool) -> Result<Vec<Url>, Error> {
@@ -64,4 +64,10 @@ pub async fn get_all_urls(db_pool: &PgPool) -> Result<Vec<Url>, Error> {
     let urls = sqlx::query_as::<_, Url>(query).fetch_all(db_pool).await?;
 
     Ok(urls)
+}
+
+pub async fn delete_url(db_pool: &PgPool, id: i32) -> Result<(), Error> {
+    let query = "DELETE FROM urls WHERE id = $1";
+    sqlx::query(query).bind(id).execute(db_pool).await?;
+    Ok(())
 }
