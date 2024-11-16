@@ -74,7 +74,16 @@ async fn saves(db_pool: web::Data<PgPool>) -> impl Responder {
 }
 
 fn render_html(urls: &[database::Url]) -> String {
-    let mut html = String::from("<!DOCTYPE html><html><head><title>Saved URLs</title></head><body>");
+    let mut html = String::from(
+        r#"<!DOCTYPE html>
+        <html>
+        <head>
+            <title>Saved URLs</title>
+            <meta http-equiv="refresh" content="3">
+        </head>
+        <body>
+        "#,
+    );
     html.push_str("<h1>Saved URLs</h1>");
     html.push_str("<ol>");
     for url in urls {

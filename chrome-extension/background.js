@@ -1,6 +1,6 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "sendUrl") {
-        fetch("http://192.168.1.56:8080/urls/url", {
+        fetch("http://localhost:8080/urls/url", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
