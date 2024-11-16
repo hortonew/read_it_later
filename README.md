@@ -2,10 +2,10 @@
 
 An implementation of a read it later or bookmark manager style app (e.g. Pocket, Omnivore, Raindrop.io, etc.).
 
-API: Rust and Actix Web
-Database: Postgres
-Cache: Redis (not implemented yet)
-Client: Chrome Extension
+- API: Rust and Actix Web
+- Database: Postgres
+- Cache: Redis (not implemented yet)
+- Client: Chrome Extension
 
 ## Configure
 
@@ -39,3 +39,15 @@ docker compose up
 3. Click "Load Unpacked"
 4. Open the directory "chrome-extension"
 5. Pin the URL Poster app, navigate to a url, and submit a url
+
+## Example
+
+Start environment
+![images/docker_compose.png](images/docker_compose.png)
+
+Chrome Extension: Send URL
+
+![images/send_url.png](images/send_url.png)
+
+Saved URLs
+![images/saved_urls.png](images/saved_urls.png)
