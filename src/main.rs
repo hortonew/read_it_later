@@ -21,9 +21,12 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to initialize PostgreSQL pool");
 
+    services::database::create_urls_table(&db_pool)
+        .await
+        .expect("Failed to create `urls` table");
+
     // Initialize Redis client
-    let redis_client =
-        caching::initialize_client(&redis_url).expect("Failed to initialize Redis client");
+    let redis_client = caching::initialize_client(&redis_url).expect("Failed to initialize Redis client");
 
     // Start the Actix Web server
     HttpServer::new(move || {
