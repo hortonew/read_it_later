@@ -154,13 +154,6 @@ pub async fn insert_tags(db_pool: &PgPool, url: &str, tags: &[&str]) -> Result<(
     Ok(())
 }
 
-/// Delete a URL by its ID
-pub async fn delete_url(db_pool: &PgPool, id: i32) -> Result<(), Error> {
-    let query = "DELETE FROM urls WHERE id = $1";
-    sqlx::query(query).bind(id).execute(db_pool).await?;
-    Ok(())
-}
-
 /// Delete a URL by its string value
 pub async fn delete_url_by_url(db_pool: &PgPool, url: &str) -> Result<(), Error> {
     let url_hash = calculate_url_hash(url);

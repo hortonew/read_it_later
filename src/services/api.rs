@@ -66,53 +66,6 @@ async fn list_urls(db_pool: web::Data<PgPool>) -> impl Responder {
     }
 }
 
-#[get("/saves")]
-async fn saves(db_pool: web::Data<PgPool>) -> impl Responder {
-    let result = database::get_all_urls(db_pool.get_ref()).await;
-
-    match result {
-        Ok(urls) => {
-            // Render the HTML with an ordered list
-            let html = render_html(&urls);
-            HttpResponse::Ok().content_type("text/html").body(html)
-        }
-        Err(err) => {
-            eprintln!("Failed to fetch URLs: {:?}", err);
-            HttpResponse::InternalServerError().body("Failed to fetch URLs")
-        }
-    }
-}
-
-fn render_html(urls: &[database::Url]) -> String {
-    let mut html = String::from(
-        r#"<!DOCTYPE html>
-        <html>
-        <head>
-            <title>Saved URLs</title>
-            <meta http-equiv="refresh" content="3">
-        </head>
-        <body>
-        "#,
-    );
-    html.push_str("<h1>Saved URLs</h1>");
-    html.push_str("<ol>");
-    for url in urls {
-        html.push_str(&format!(
-            "<li><a href=\"{url}\" target=\"_blank\">{url}</a> 
-             <form method=\"POST\" action=\"/urls/delete\" style=\"display:inline;\">
-                 <input type=\"hidden\" name=\"id\" value=\"{id}\" />
-                 <button type=\"submit\">Remove</button>
-             </form>
-             </li>",
-            url = url.url,
-            id = url.id
-        ));
-    }
-    html.push_str("</ol>");
-    html.push_str("</body></html>");
-    html
-}
-
 fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
     let mut html = String::from(
         r#"<!DOCTYPE html>
@@ -160,24 +113,6 @@ fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
     html.push_str("</ol>");
     html.push_str("</body></html>");
     html
-}
-
-#[derive(Deserialize)]
-pub struct DeleteUrl {
-    id: i32,
-}
-
-#[post("/urls/delete")]
-async fn delete_record(db_pool: web::Data<PgPool>, form: web::Form<DeleteUrl>) -> impl Responder {
-    let result = database::delete_url(db_pool.get_ref(), form.id).await;
-
-    match result {
-        Ok(_) => HttpResponse::Found().append_header(("Location", "/saves")).finish(),
-        Err(err) => {
-            eprintln!("Failed to delete record: {:?}", err);
-            HttpResponse::InternalServerError().body("Failed to delete record")
-        }
-    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -238,7 +173,5 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .service(insert_record)
         .service(insert_tags)
         .service(list_urls_with_tags)
-        .service(saves)
-        .service(delete_record)
         .service(delete_record_by_url);
 }
