@@ -102,27 +102,18 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
         const highlightedText = info.selectionText; // Get selected text
         const tabUrl = tab.url;
 
-        // Add logic to send the snippet
-        fetch("http://localhost:8080/snippets", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                url: tabUrl,
-                snippet: highlightedText,
-                tags: "" // You can enhance this to include tags if needed
-            })
-        })
-            .then(response => {
-                if (response.ok) {
-                    console.log("Snippet sent successfully!");
-                } else {
-                    console.error("Error sending snippet:", response.statusText);
-                }
-            })
-            .catch(error => {
-                console.error("Failed to send snippet:", error);
-            });
+        // Open the popup for adding tags
+        chrome.windows.create({
+            url: `popup.html?url=${encodeURIComponent(tabUrl)}&snippet=${encodeURIComponent(highlightedText)}`,
+            type: "popup",
+            width: 400,
+            height: 300
+        }, (window) => {
+            if (chrome.runtime.lastError) {
+                console.error("Error creating popup:", chrome.runtime.lastError);
+            } else {
+                console.log("Popup created successfully:", window);
+            }
+        });
     }
 });

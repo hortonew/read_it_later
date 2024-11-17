@@ -1,28 +1,73 @@
 // Maintain a list of tags for synchronization
 let tagsList = [];
+let isSnippetMode = false; // Track if the current mode is for a snippet
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tabUrl = tab.url; // Get the active tab's URL
     const statusElement = document.getElementById("status");
-
-    const removeButton = document.getElementById("removeUrlButton");
     const tagsInput = document.getElementById("tagsInput");
+    const removeButton = document.getElementById("removeUrlButton");
 
-    // Disable buttons initially by removing 'enabled' class
-    removeButton.classList.remove("enabled");
-    tagsInput.classList.remove("enabled");
+    // Parse URL parameters for snippet and URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const snippet = urlParams.get("snippet");
+    const tabUrl = urlParams.get("url");
 
-    // Attempt to send URL
+    // Determine the mode (snippet or URL)
+    if (snippet && snippet.trim() !== "") {
+        isSnippetMode = true; // Enable snippet mode
+        handleSnippet(tabUrl, snippet, statusElement, tagsInput);
+    } else {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        handleUrl(tab.url, statusElement, removeButton, tagsInput);
+    }
+});
+
+function handleSnippet(tabUrl, snippet, statusElement, tagsInput) {
+    // Enable the tags input field
+    tagsInput.classList.add("enabled");
+
+    // Create and enable the "Send Snippet" button
+    const sendSnippetButton = document.createElement("button");
+    sendSnippetButton.textContent = "Send Snippet";
+    sendSnippetButton.classList.add("enabled");
+    document.body.appendChild(sendSnippetButton);
+
+    // Set up the button click handler for sending snippets
+    sendSnippetButton.addEventListener("click", async () => {
+        const tags = tagsList.join(",");
+
+        try {
+            chrome.runtime.sendMessage(
+                { action: "sendSnippet", url: tabUrl, snippet, tags },
+                response => {
+                    if (response.status === "success") {
+                        statusElement.textContent = "Snippet sent successfully!";
+                        chrome.storage.local.remove("snippetData"); // Clear snippet data
+                        window.close(); // Close popup after successful submission
+                    } else {
+                        statusElement.textContent = `Error: ${response.error}`;
+                    }
+                }
+            );
+        } catch (error) {
+            console.error("Failed to send snippet:", error);
+            statusElement.textContent = `Error: ${error.message}`;
+        }
+    });
+}
+
+function handleUrl(tabUrl, statusElement, removeButton, tagsInput) {
+    // Enable buttons initially
+    removeButton.classList.add("enabled");
+    tagsInput.classList.add("enabled");
+
+    // Attempt to send the URL
     try {
         chrome.runtime.sendMessage(
             { action: "sendUrl", url: tabUrl },
             response => {
                 if (response.status === "success") {
                     statusElement.textContent = "URL sent successfully!";
-                    // Enable buttons
-                    removeButton.classList.add("enabled");
-                    tagsInput.classList.add("enabled");
                 } else {
                     statusElement.textContent = `Error: ${response.error}`;
                 }
@@ -32,8 +77,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error("Failed to send URL:", error);
         statusElement.textContent = `Error: ${error.message}`;
     }
-});
-
+}
 
 // Remove URL handler
 document.getElementById("removeUrlButton").addEventListener("click", async () => {
@@ -59,16 +103,18 @@ document.getElementById("removeUrlButton").addEventListener("click", async () =>
 // Add tag on Enter or comma
 document.getElementById("tagsInput").addEventListener("keydown", async function (event) {
     if (event.key === "," || event.key === "Enter") {
-        event.preventDefault(); // Prevent adding the comma in the input field
+        event.preventDefault();
 
-        // Get the value of the input and remove whitespace and commas
         const input = event.target.value.trim().replace(/,$/, "");
-
         if (input && input !== "✖") {
             addTag(input);
             tagsList.push(input); // Add the tag to the list
             event.target.value = ""; // Clear the input field
-            syncTags(); // Sync the updated tags list
+
+            if (!isSnippetMode) {
+                // Sync tags only in URL mode
+                syncTags();
+            }
         }
     }
 });
@@ -88,29 +134,27 @@ function addTag(text) {
     const tag = document.createElement("div");
     tag.className = "tag";
 
-    // Add the tag text
     const span = document.createElement("span");
     span.textContent = text;
     tag.appendChild(span);
 
-    // Add a remove button
     const close = document.createElement("span");
     close.textContent = "✖";
     close.className = "close";
     close.addEventListener("click", function () {
-        tagContainer.removeChild(tag); // Remove tag on click
-        removeTag(text); // Remove tag from the list
-        syncTags(); // Sync the updated tags list
+        tagContainer.removeChild(tag);
+        removeTag(text);
+
+        if (!isSnippetMode) {
+            // Sync tags only in URL mode
+            syncTags();
+        }
     });
 
     tag.appendChild(close);
-
-    // Insert the tag before the input field
-    const inputField = document.getElementById("tagsInput");
-    tagContainer.insertBefore(tag, inputField);
+    tagContainer.insertBefore(tag, tagsInput);
 }
 
-// Function to remove a tag from the list
 function removeTag(text) {
     const index = tagsList.indexOf(text);
     if (index > -1) {
@@ -118,7 +162,6 @@ function removeTag(text) {
     }
 }
 
-// Function to sync tags with the server
 async function syncTags() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -137,51 +180,4 @@ async function syncTags() {
     } catch (error) {
         console.error("Failed to sync tags:", error);
     }
-}
-
-// Add a "Send Snippet" button dynamically
-document.addEventListener("DOMContentLoaded", async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tabUrl = tab.url;
-
-    const statusElement = document.getElementById("status");
-    const sendSnippetButton = document.createElement("button");
-    sendSnippetButton.textContent = "Send Snippet";
-    document.body.appendChild(sendSnippetButton);
-
-    sendSnippetButton.addEventListener("click", async () => {
-        const highlightedText = await getHighlightedText(tab.id);
-        const tags = tagsList.join(",");
-
-        if (!highlightedText) {
-            statusElement.textContent = "No text highlighted!";
-            return;
-        }
-
-        try {
-            chrome.runtime.sendMessage(
-                { action: "sendSnippet", url: tabUrl, snippet: highlightedText, tags },
-                response => {
-                    if (response.status === "success") {
-                        statusElement.textContent = "Snippet sent successfully!";
-                    } else {
-                        statusElement.textContent = `Error: ${response.error}`;
-                    }
-                }
-            );
-        } catch (error) {
-            console.error("Failed to send snippet:", error);
-            statusElement.textContent = `Error: ${error.message}`;
-        }
-    });
-});
-
-// Function to get the highlighted text from the active tab
-async function getHighlightedText(tabId) {
-    const [result] = await chrome.scripting.executeScript({
-        target: { tabId },
-        func: () => window.getSelection().toString()
-    });
-
-    return result.result;
 }
