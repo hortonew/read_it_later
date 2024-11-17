@@ -32,6 +32,9 @@ async fn main() -> std::io::Result<()> {
     services::database::create_tags_table(&db_pool)
         .await
         .expect("Failed to create `tags` table");
+    database::create_url_tags_table(&db_pool)
+        .await
+        .expect("Failed to create `url_tags` table");
 
     // Initialize Redis client
     let redis_client = caching::initialize_client(&redis_url).expect("Failed to initialize Redis client");

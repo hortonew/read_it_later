@@ -32,10 +32,9 @@ pub struct NewUrl {
 
 #[post("/urls/url")]
 async fn insert_record(db_pool: web::Data<PgPool>, req: web::Json<NewUrl>) -> impl Responder {
-    let result = database::insert_url(db_pool.get_ref(), &req.url).await;
-
-    match result {
+    match database::insert_url(db_pool.get_ref(), &req.url).await {
         Ok(_) => HttpResponse::Ok().json("Record inserted successfully"),
+        Err(sqlx::Error::RowNotFound) => HttpResponse::Conflict().json("Record already exists"),
         Err(err) => {
             eprintln!("Failed to insert record: {:?}", err);
             HttpResponse::InternalServerError().json("Failed to insert record")
@@ -149,13 +148,11 @@ pub struct UrlTags {
 
 #[post("/urls/tags")]
 async fn insert_tags(db_pool: web::Data<PgPool>, req: web::Json<UrlTags>) -> impl Responder {
-    let result = database::insert_tags(db_pool.get_ref(), &req.url, &req.tags).await;
+    let tags: Vec<&str> = req.tags.split(',').map(|tag| tag.trim()).collect();
 
-    match result {
-        Ok(_) => {
-            println!("Tags inserted successfully: {:?}", req.tags);
-            HttpResponse::Ok().json("Tags inserted successfully")
-        }
+    match database::insert_tags(db_pool.get_ref(), &req.url, &tags).await {
+        Ok(_) => HttpResponse::Ok().json("Tags inserted successfully"),
+        Err(sqlx::Error::RowNotFound) => HttpResponse::Conflict().json("One or more tags already exist for this URL"),
         Err(err) => {
             eprintln!("Failed to insert tags: {:?}", err);
             HttpResponse::InternalServerError().json("Failed to insert tags")
@@ -165,9 +162,7 @@ async fn insert_tags(db_pool: web::Data<PgPool>, req: web::Json<UrlTags>) -> imp
 
 #[get("/urls_with_tags")]
 async fn list_urls_with_tags(db_pool: web::Data<PgPool>) -> impl Responder {
-    let result = database::get_urls_with_tags(db_pool.get_ref()).await;
-
-    match result {
+    match database::get_urls_with_tags(db_pool.get_ref()).await {
         Ok(urls_with_tags) => HttpResponse::Ok().json(urls_with_tags),
         Err(err) => {
             eprintln!("Failed to fetch URLs with tags: {:?}", err);
