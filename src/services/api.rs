@@ -269,7 +269,7 @@ async fn insert_snippet(db_pool: web::Data<PgPool>, req: web::Json<NewSnippet>) 
 
 #[derive(Deserialize, Debug)]
 pub struct DeleteSnippet {
-    snippet: String,
+    id: i32,
 }
 
 #[get("/snippets")]
@@ -293,7 +293,7 @@ async fn snippets_page(db_pool: web::Data<PgPool>) -> impl Responder {
 async fn delete_snippet(db_pool: web::Data<PgPool>, req: web::Json<DeleteSnippet>) -> impl Responder {
     println!("Body: {:?}", req);
 
-    let result = database::delete_snippet(db_pool.get_ref(), &req.snippet).await;
+    let result = database::delete_snippet(db_pool.get_ref(), req.id).await;
 
     match result {
         Ok(_) => HttpResponse::Ok().json("Snippet deleted successfully"),
@@ -313,18 +313,21 @@ fn render_html_with_snippets(snippets_with_tags: &[database::SnippetWithTags]) -
             <meta http-equiv="refresh" content="3">
             <meta charset="UTF-8">
             <script>
-                async function submitDeleteSnippet(event, snippet) {
+                async function submitDeleteSnippet(event, id) {
                     event.preventDefault();
+                    console.log('Snippet ID to delete:', id); // Debugging output
                     try {
                         const response = await fetch('/snippets/delete', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ snippet })
+                            body: JSON.stringify({ id })
                         });
                         if (response.ok) {
+                            console.log('Snippet deleted successfully'); // Debugging output
                             location.reload();
                         } else {
                             alert('Failed to delete snippet');
+                            console.error('Response error:', response.statusText); // Debugging output
                         }
                     } catch (error) {
                         console.error('Error:', error);
@@ -344,12 +347,13 @@ fn render_html_with_snippets(snippets_with_tags: &[database::SnippetWithTags]) -
     for snippet_with_tags in snippets_with_tags {
         html.push_str(&format!(
             r#"<li>
-                <button onclick="submitDeleteSnippet(event, '{snippet}')">X</button>
+                <button onclick="submitDeleteSnippet(event, {id})">X</button>
                 <div>{snippet}</div>
                 <div>URL: <a href="{url}" target="_blank">{url}</a></div>
                 <div>Tags: {tags}</div>
             </li>"#,
-            snippet = snippet_with_tags.snippet,
+            id = snippet_with_tags.id, // Include the `id` in the format string
+            snippet = snippet_with_tags.snippet.replace('"', "&quot;").replace("'", "&#39;"), // Escape quotes
             url = snippet_with_tags.url,
             tags = snippet_with_tags.tags.join(", ")
         ));

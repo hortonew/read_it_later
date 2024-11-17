@@ -196,9 +196,9 @@ pub async fn delete_url_by_url(db_pool: &PgPool, url: &str) -> Result<(), Error>
 }
 
 /// Delete a snippet by its string value
-pub async fn delete_snippet(db_pool: &PgPool, snippet: &str) -> Result<(), Error> {
-    let query = "DELETE FROM snippets WHERE snippet = $1";
-    sqlx::query(query).bind(snippet).execute(db_pool).await?;
+pub async fn delete_snippet(db_pool: &PgPool, id: i32) -> Result<(), Error> {
+    let query = "DELETE FROM snippets WHERE id = $1";
+    sqlx::query(query).bind(id).execute(db_pool).await?;
     Ok(())
 }
 
@@ -289,6 +289,7 @@ pub async fn get_tags_with_urls(db_pool: &PgPool) -> Result<Vec<(String, Vec<Str
 
 #[derive(Serialize)]
 pub struct SnippetWithTags {
+    pub id: i32,
     pub snippet: String,
     pub url: String,
     pub tags: Vec<String>,
@@ -297,7 +298,7 @@ pub struct SnippetWithTags {
 /// Fetch all snippets with their associated tags
 pub async fn get_snippets_with_tags(db_pool: &PgPool) -> Result<Vec<SnippetWithTags>, Error> {
     let query = r#"
-        SELECT snippet, url, COALESCE(tags, ARRAY[]::TEXT[]) AS tags
+        SELECT id, snippet, url, COALESCE(tags, ARRAY[]::TEXT[]) AS tags
         FROM snippets
         ORDER BY id DESC
     "#;
@@ -306,10 +307,11 @@ pub async fn get_snippets_with_tags(db_pool: &PgPool) -> Result<Vec<SnippetWithT
     let mut results = Vec::new();
 
     for row in rows {
+        let id: i32 = row.get("id");
         let snippet: String = row.get("snippet");
         let url: String = row.get("url");
         let tags: Vec<String> = row.try_get("tags").unwrap_or_default();
-        results.push(SnippetWithTags { snippet, url, tags });
+        results.push(SnippetWithTags { id, snippet, url, tags });
     }
 
     Ok(results)
