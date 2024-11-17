@@ -78,6 +78,21 @@ pub async fn create_url_tags_table(db_pool: &PgPool) -> Result<(), Error> {
     Ok(())
 }
 
+/// Create the `snippets` table
+pub async fn create_snippets_table(db_pool: &PgPool) -> Result<(), Error> {
+    let query = r#"
+        CREATE TABLE IF NOT EXISTS snippets (
+            id SERIAL PRIMARY KEY,
+            url TEXT NOT NULL,
+            snippet TEXT NOT NULL,
+            tags TEXT[]
+        )
+    "#;
+
+    sqlx::query(query).execute(db_pool).await?;
+    Ok(())
+}
+
 /// Hash a URL to create a unique identifier
 fn calculate_url_hash(url: &str) -> String {
     let mut hasher = Sha256::new();
@@ -104,6 +119,24 @@ pub async fn insert_url(db_pool: &PgPool, url: &str) -> Result<i32, Error> {
         .await?;
 
     Ok(url_id)
+}
+
+/// Insert a snippet into the database
+pub async fn insert_snippet(db_pool: &PgPool, url: &str, snippet: &str, tags: &[&str]) -> Result<i32, Error> {
+    let query = r#"
+        INSERT INTO snippets (url, snippet, tags)
+        VALUES ($1, $2, $3)
+        RETURNING id
+    "#;
+
+    let snippet_id: i32 = sqlx::query_scalar(query)
+        .bind(url)
+        .bind(snippet)
+        .bind(tags)
+        .fetch_one(db_pool)
+        .await?;
+
+    Ok(snippet_id)
 }
 
 /// Insert tags into the database and associate them with a URL
@@ -159,6 +192,13 @@ pub async fn delete_url_by_url(db_pool: &PgPool, url: &str) -> Result<(), Error>
     let url_hash = calculate_url_hash(url);
     let query = "DELETE FROM urls WHERE url_hash = $1";
     sqlx::query(query).bind(url_hash).execute(db_pool).await?;
+    Ok(())
+}
+
+/// Delete a snippet by its string value
+pub async fn delete_snippet(db_pool: &PgPool, snippet: &str) -> Result<(), Error> {
+    let query = "DELETE FROM snippets WHERE snippet = $1";
+    sqlx::query(query).bind(snippet).execute(db_pool).await?;
     Ok(())
 }
 
@@ -242,6 +282,34 @@ pub async fn get_tags_with_urls(db_pool: &PgPool) -> Result<Vec<(String, Vec<Str
         let tag: String = row.get("tag");
         let urls: Vec<String> = row.try_get("urls").unwrap_or_default();
         results.push((tag, urls));
+    }
+
+    Ok(results)
+}
+
+#[derive(Serialize)]
+pub struct SnippetWithTags {
+    pub snippet: String,
+    pub url: String,
+    pub tags: Vec<String>,
+}
+
+/// Fetch all snippets with their associated tags
+pub async fn get_snippets_with_tags(db_pool: &PgPool) -> Result<Vec<SnippetWithTags>, Error> {
+    let query = r#"
+        SELECT snippet, url, COALESCE(tags, ARRAY[]::TEXT[]) AS tags
+        FROM snippets
+        ORDER BY id DESC
+    "#;
+
+    let rows = sqlx::query(query).fetch_all(db_pool).await?;
+    let mut results = Vec::new();
+
+    for row in rows {
+        let snippet: String = row.get("snippet");
+        let url: String = row.get("url");
+        let tags: Vec<String> = row.try_get("tags").unwrap_or_default();
+        results.push(SnippetWithTags { snippet, url, tags });
     }
 
     Ok(results)

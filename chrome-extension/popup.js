@@ -138,3 +138,50 @@ async function syncTags() {
         console.error("Failed to sync tags:", error);
     }
 }
+
+// Add a "Send Snippet" button dynamically
+document.addEventListener("DOMContentLoaded", async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabUrl = tab.url;
+
+    const statusElement = document.getElementById("status");
+    const sendSnippetButton = document.createElement("button");
+    sendSnippetButton.textContent = "Send Snippet";
+    document.body.appendChild(sendSnippetButton);
+
+    sendSnippetButton.addEventListener("click", async () => {
+        const highlightedText = await getHighlightedText(tab.id);
+        const tags = tagsList.join(",");
+
+        if (!highlightedText) {
+            statusElement.textContent = "No text highlighted!";
+            return;
+        }
+
+        try {
+            chrome.runtime.sendMessage(
+                { action: "sendSnippet", url: tabUrl, snippet: highlightedText, tags },
+                response => {
+                    if (response.status === "success") {
+                        statusElement.textContent = "Snippet sent successfully!";
+                    } else {
+                        statusElement.textContent = `Error: ${response.error}`;
+                    }
+                }
+            );
+        } catch (error) {
+            console.error("Failed to send snippet:", error);
+            statusElement.textContent = `Error: ${error.message}`;
+        }
+    });
+});
+
+// Function to get the highlighted text from the active tab
+async function getHighlightedText(tabId) {
+    const [result] = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => window.getSelection().toString()
+    });
+
+    return result.result;
+}

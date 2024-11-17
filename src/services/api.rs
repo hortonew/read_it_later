@@ -73,6 +73,7 @@ fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
         <head>
             <title>Read it Later</title>
             <meta http-equiv="refresh" content="3">
+            <meta charset="UTF-8">
             <script>
                 async function submitDeleteUrl(event, url) {
                     event.preventDefault();
@@ -95,7 +96,9 @@ fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
             </script>
         </head>
         <body>
+        <p><a href="/">Home</a></p>
         <p><a href="/tags">Tags</a></p>
+        <p><a href="/snippets">Snippets</a></p>
         "#,
     );
     html.push_str("<h1>Read it Later</h1>");
@@ -197,6 +200,7 @@ fn render_html_with_tags_and_urls(tags_with_urls: &[(String, Vec<String>)]) -> S
         <head>
             <title>Tags</title>
             <meta http-equiv="refresh" content="3">
+            <meta charset="UTF-8">
             <script>
                 async function submitDeleteUrl(event, url) {
                     event.preventDefault();
@@ -220,6 +224,8 @@ fn render_html_with_tags_and_urls(tags_with_urls: &[(String, Vec<String>)]) -> S
         </head>
         <body>
         <p><a href="/">Home</a></p>
+        <p><a href="/tags">Tags</a></p>
+        <p><a href="/snippets">Snippets</a></p>
         "#,
     );
     html.push_str("<h1>Tags</h1>");
@@ -241,6 +247,118 @@ fn render_html_with_tags_and_urls(tags_with_urls: &[(String, Vec<String>)]) -> S
     html
 }
 
+#[derive(Deserialize)]
+pub struct NewSnippet {
+    url: String,
+    snippet: String,
+    tags: String,
+}
+
+#[post("/snippets")]
+async fn insert_snippet(db_pool: web::Data<PgPool>, req: web::Json<NewSnippet>) -> impl Responder {
+    let tags: Vec<&str> = req.tags.split(',').map(|tag| tag.trim()).collect();
+
+    match database::insert_snippet(db_pool.get_ref(), &req.url, &req.snippet, &tags).await {
+        Ok(_) => HttpResponse::Ok().json("Snippet inserted successfully"),
+        Err(err) => {
+            eprintln!("Failed to insert snippet: {:?}", err);
+            HttpResponse::InternalServerError().json("Failed to insert snippet")
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DeleteSnippet {
+    snippet: String,
+}
+
+#[get("/snippets")]
+async fn snippets_page(db_pool: web::Data<PgPool>) -> impl Responder {
+    let result = database::get_snippets_with_tags(db_pool.get_ref()).await;
+
+    match result {
+        Ok(snippets_with_tags) => {
+            // Render the HTML with the structured list of snippets and their tags
+            let html = render_html_with_snippets(&snippets_with_tags);
+            HttpResponse::Ok().content_type("text/html").body(html)
+        }
+        Err(err) => {
+            eprintln!("Failed to fetch snippets with tags: {:?}", err);
+            HttpResponse::InternalServerError().body("Failed to fetch snippets with tags")
+        }
+    }
+}
+
+#[post("/snippets/delete")]
+async fn delete_snippet(db_pool: web::Data<PgPool>, req: web::Json<DeleteSnippet>) -> impl Responder {
+    println!("Body: {:?}", req);
+
+    let result = database::delete_snippet(db_pool.get_ref(), &req.snippet).await;
+
+    match result {
+        Ok(_) => HttpResponse::Ok().json("Snippet deleted successfully"),
+        Err(err) => {
+            eprintln!("Failed to delete snippet: {:?}", err);
+            HttpResponse::InternalServerError().json("Failed to delete snippet")
+        }
+    }
+}
+
+fn render_html_with_snippets(snippets_with_tags: &[database::SnippetWithTags]) -> String {
+    let mut html = String::from(
+        r#"<!DOCTYPE html>
+        <html>
+        <head>
+            <title>Snippets</title>
+            <meta http-equiv="refresh" content="3">
+            <meta charset="UTF-8">
+            <script>
+                async function submitDeleteSnippet(event, snippet) {
+                    event.preventDefault();
+                    try {
+                        const response = await fetch('/snippets/delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ snippet })
+                        });
+                        if (response.ok) {
+                            location.reload();
+                        } else {
+                            alert('Failed to delete snippet');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('An error occurred while deleting the snippet');
+                    }
+                }
+            </script>
+        </head>
+        <body>
+        <p><a href="/">Home</a></p>
+        <p><a href="/tags">Tags</a></p>
+        <p><a href="/snippets">Snippets</a></p>
+        "#,
+    );
+    html.push_str("<h1>Snippets</h1>");
+    html.push_str("<ol>");
+    for snippet_with_tags in snippets_with_tags {
+        html.push_str(&format!(
+            r#"<li>
+                <button onclick="submitDeleteSnippet(event, '{snippet}')">X</button>
+                <div>{snippet}</div>
+                <div>URL: <a href="{url}" target="_blank">{url}</a></div>
+                <div>Tags: {tags}</div>
+            </li>"#,
+            snippet = snippet_with_tags.snippet,
+            url = snippet_with_tags.url,
+            tags = snippet_with_tags.tags.join(", ")
+        ));
+    }
+    html.push_str("</ol>");
+    html.push_str("</body></html>");
+    html
+}
+
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(index)
         .service(tags_page)
@@ -249,5 +367,8 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .service(insert_record)
         .service(insert_tags)
         .service(list_urls_with_tags)
-        .service(delete_record_by_url);
+        .service(delete_record_by_url)
+        .service(insert_snippet)
+        .service(snippets_page)
+        .service(delete_snippet); // Add the new route here
 }
