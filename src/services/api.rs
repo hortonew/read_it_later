@@ -6,9 +6,20 @@ use serde_json::json;
 use sqlx::PgPool;
 
 #[get("/")]
-async fn index() -> impl Responder {
-    let response = std::env::var("INDEX_RESPONSE").unwrap_or_else(|_| "Welcome".to_string());
-    HttpResponse::Ok().body(response)
+async fn index(db_pool: web::Data<PgPool>) -> impl Responder {
+    let result = database::get_urls_with_tags(db_pool.get_ref()).await;
+
+    match result {
+        Ok(urls_with_tags) => {
+            // Render the HTML with an ordered list of URLs and their tags
+            let html = render_html_with_tags(&urls_with_tags);
+            HttpResponse::Ok().content_type("text/html").body(html)
+        }
+        Err(err) => {
+            eprintln!("Failed to fetch URLs with tags: {:?}", err);
+            HttpResponse::InternalServerError().body("Failed to fetch URLs with tags")
+        }
+    }
 }
 
 #[get("/health")]
@@ -95,6 +106,54 @@ fn render_html(urls: &[database::Url]) -> String {
              </li>",
             url = url.url,
             id = url.id
+        ));
+    }
+    html.push_str("</ol>");
+    html.push_str("</body></html>");
+    html
+}
+
+fn render_html_with_tags(urls_with_tags: &[(String, Vec<String>)]) -> String {
+    let mut html = String::from(
+        r#"<!DOCTYPE html>
+        <html>
+        <head>
+            <title>Read it Later</title>
+            <meta http-equiv="refresh" content="3">
+            <script>
+                async function submitDeleteUrl(event, url) {
+                    event.preventDefault();
+                    try {
+                        const response = await fetch('/urls/delete/by-url', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url })
+                        });
+                        if (response.ok) {
+                            location.reload();
+                        } else {
+                            alert('Failed to delete URL');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('An error occurred while deleting the URL');
+                    }
+                }
+            </script>
+        </head>
+        <body>
+        "#,
+    );
+    html.push_str("<h1>Read it Later</h1>");
+    html.push_str("<ol>");
+    for (url, tags) in urls_with_tags {
+        html.push_str(&format!(
+            r#"<li>
+                <a href="{url}" target="_blank">{url}</a> - Tags: {tags}
+                <button onclick="submitDeleteUrl(event, '{url}')">Remove</button>
+            </li>"#,
+            url = url,
+            tags = tags.join(", ")
         ));
     }
     html.push_str("</ol>");
