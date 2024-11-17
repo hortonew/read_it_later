@@ -40,6 +40,35 @@ docker compose up
 4. Open the directory "chrome-extension"
 5. Pin the URL Poster app, navigate to a url, and submit a url
 
+## API
+
+### Add URL
+
+```sh
+curl -X POST http://localhost:8080/urls/url \
+-H "Content-Type: application/json" \
+-d '{"url": "https://example.com"}'
+```
+
+### Get URLs
+
+```sh
+curl -X GET http://localhost:8080/urls -H "Content-Type: application/json"
+```
+
+Response
+```json
+[
+  {
+    "id": 21,
+    "datetime": "2024-11-16T23:53:47.249492",
+    "url": "https://github.com/hortonew/read_it_later",
+    "url_hash": "48251ffc828eff7d7439ad486482d4463886bd59f94aead8f5e7fc185534abc9"
+  },
+  ...
+]
+```
+
 ## Example
 
 Start environment
