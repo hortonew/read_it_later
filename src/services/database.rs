@@ -191,14 +191,21 @@ pub async fn get_all_urls(db_pool: &PgPool) -> Result<Vec<Url>, Error> {
     Ok(urls)
 }
 
+#[derive(Serialize)]
+pub struct UrlWithTags {
+    pub url: String,
+    pub tags: Vec<String>,
+}
+
 /// Fetch all URLs with their associated tags
-pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<(String, Vec<String>)>, Error> {
+pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<UrlWithTags>, Error> {
     let query = r#"
         SELECT urls.url, COALESCE(ARRAY_AGG(tags.tag), ARRAY[]::TEXT[]) AS tags
         FROM urls
         LEFT JOIN url_tags ON urls.id = url_tags.url_id
         LEFT JOIN tags ON url_tags.tag_id = tags.id
-        GROUP BY urls.url
+        GROUP BY urls.id, urls.datetime, urls.url
+        ORDER BY urls.datetime DESC
     "#;
 
     let rows = sqlx::query(query).fetch_all(db_pool).await?;
@@ -207,7 +214,7 @@ pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<(String, Vec<Str
     for row in rows {
         let url: String = row.get("url");
         let tags: Vec<String> = row.try_get("tags").unwrap_or_default();
-        results.push((url, tags));
+        results.push(UrlWithTags { url, tags });
     }
 
     Ok(results)

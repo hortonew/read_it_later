@@ -29,7 +29,7 @@ REDIS_PORT=6379
 
 ```sh
 docker compose up
-# navigate to http://localhost:8080/saves
+# navigate to http://localhost:8080
 ```
 
 ## Rebuild
@@ -58,10 +58,18 @@ curl -X POST http://localhost:8080/urls/url \
 -d '{"url": "https://example.com"}'
 ```
 
+### Add URL with tags, or apply tags to existing URL
+
+```sh
+curl -X POST http://localhost:8080/urls/tags \
+-H "Content-Type: application/json" \
+-d '{"url": "https://example.com", "tags": "list,of,tags"}'
+```
+
 ### Get URLs
 
 ```sh
-curl -X GET http://localhost:8080/urls -H "Content-Type: application/json"
+curl -s http://localhost:8080/urls -H "Content-Type: application/json" | jq
 ```
 
 Response
@@ -72,6 +80,31 @@ Response
     "datetime": "2024-11-16T23:53:47.249492",
     "url": "https://github.com/hortonew/read_it_later",
     "url_hash": "48251ffc828eff7d7439ad486482d4463886bd59f94aead8f5e7fc185534abc9"
+  },
+  ...
+]
+```
+
+
+### Get URLs with tags
+
+```sh
+curl -s http://localhost:8080/urls_with_tags -H "Content-Type: application/json" | jq
+```
+
+Response
+```json
+[
+  {
+    "url": "https://chatgpt.com/c/673a12a8-9db0-8010-8d60-fce4ec97f3c5",
+    "tags": []
+  },
+  {
+    "url": "https://www.reddit.com/r/rust/comments/1gtaai2/question_why_cant_two_static_strs_be_concatenated/",
+    "tags": [
+      "rust",
+      "bevy"
+    ]
   },
   ...
 ]

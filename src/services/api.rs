@@ -11,7 +11,7 @@ async fn index(db_pool: web::Data<PgPool>) -> impl Responder {
 
     match result {
         Ok(urls_with_tags) => {
-            // Render the HTML with an ordered list of URLs and their tags
+            // Render the HTML with the structured list of URLs and their tags
             let html = render_html_with_tags(&urls_with_tags);
             HttpResponse::Ok().content_type("text/html").body(html)
         }
@@ -113,7 +113,7 @@ fn render_html(urls: &[database::Url]) -> String {
     html
 }
 
-fn render_html_with_tags(urls_with_tags: &[(String, Vec<String>)]) -> String {
+fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
     let mut html = String::from(
         r#"<!DOCTYPE html>
         <html>
@@ -146,14 +146,15 @@ fn render_html_with_tags(urls_with_tags: &[(String, Vec<String>)]) -> String {
     );
     html.push_str("<h1>Read it Later</h1>");
     html.push_str("<ol>");
-    for (url, tags) in urls_with_tags {
+    for url_with_tags in urls_with_tags {
         html.push_str(&format!(
             r#"<li>
-                <a href="{url}" target="_blank">{url}</a> - Tags: {tags}
-                <button onclick="submitDeleteUrl(event, '{url}')">Remove</button>
+                <button onclick="submitDeleteUrl(event, '{url}')">X</button>
+                <a href="{url}" target="_blank">{url}</a>
+                <div>Tags: {tags}</div>
             </li>"#,
-            url = url,
-            tags = tags.join(", ")
+            url = url_with_tags.url,
+            tags = url_with_tags.tags.join(", ")
         ));
     }
     html.push_str("</ol>");
