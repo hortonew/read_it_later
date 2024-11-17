@@ -287,12 +287,18 @@ pub async fn get_tags_with_urls(db_pool: &PgPool) -> Result<Vec<(String, Vec<Str
     Ok(results)
 }
 
-#[derive(Serialize)]
+#[derive(FromRow, Serialize)]
 pub struct SnippetWithTags {
     pub id: i32,
     pub snippet: String,
     pub url: String,
     pub tags: Vec<String>,
+}
+
+pub struct TagWithUrlsAndSnippets {
+    pub tag: String,
+    pub urls: Vec<String>,
+    pub snippets: Vec<SnippetWithTags>,
 }
 
 /// Fetch all snippets with their associated tags
@@ -312,6 +318,40 @@ pub async fn get_snippets_with_tags(db_pool: &PgPool) -> Result<Vec<SnippetWithT
         let url: String = row.get("url");
         let tags: Vec<String> = row.try_get("tags").unwrap_or_default();
         results.push(SnippetWithTags { id, snippet, url, tags });
+    }
+
+    Ok(results)
+}
+
+pub async fn get_tags_with_urls_and_snippets(db_pool: &PgPool) -> Result<Vec<TagWithUrlsAndSnippets>, Error> {
+    let query = r#"
+        SELECT tags.tag, 
+               COALESCE(ARRAY_AGG(DISTINCT urls.url), ARRAY[]::TEXT[]) AS urls,
+               COALESCE(ARRAY_AGG(DISTINCT snippets.id), ARRAY[]::INTEGER[]) AS snippet_ids
+        FROM tags
+        LEFT JOIN url_tags ON tags.id = url_tags.tag_id
+        LEFT JOIN urls ON url_tags.url_id = urls.id
+        LEFT JOIN snippets ON tags.tag = ANY(snippets.tags)
+        GROUP BY tags.tag
+        ORDER BY tags.tag
+    "#;
+
+    let rows = sqlx::query(query).fetch_all(db_pool).await?;
+    let mut results = Vec::new();
+
+    for row in rows {
+        let tag: String = row.get("tag");
+        let urls: Vec<String> = row.try_get("urls").unwrap_or_default();
+        let snippet_ids: Vec<i32> = row.try_get("snippet_ids").unwrap_or_default();
+
+        let snippets = sqlx::query_as::<_, SnippetWithTags>(
+            "SELECT id, snippet, url, COALESCE(tags, ARRAY[]::TEXT[]) AS tags FROM snippets WHERE id = ANY($1)",
+        )
+        .bind(&snippet_ids)
+        .fetch_all(db_pool)
+        .await?;
+
+        results.push(TagWithUrlsAndSnippets { tag, urls, snippets });
     }
 
     Ok(results)

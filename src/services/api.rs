@@ -114,13 +114,15 @@ fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
     for url_with_tags in urls_with_tags {
         let sanitized_url = sanitize_with_allowed_tags(&url_with_tags.url);
         let sanitized_tags = sanitize_with_allowed_tags(&url_with_tags.tags.join(", "));
+        let display_url = url_with_tags.url.split('?').next().unwrap_or(&url_with_tags.url);
         html.push_str(&format!(
             r#"<li>
                 <button onclick="submitDeleteUrl(event, '{url}')">X</button>
-                <a href="{url}" target="_blank">{url}</a>
+                <a href="{url}" target="_blank">{display_url}</a>
                 <div>Tags: {tags}</div>
             </li>"#,
             url = sanitized_url,
+            display_url = display_url,
             tags = sanitized_tags
         ));
     }
@@ -188,22 +190,24 @@ async fn list_urls_with_tags(db_pool: web::Data<PgPool>) -> impl Responder {
 
 #[get("/tags")]
 async fn tags_page(db_pool: web::Data<PgPool>) -> impl Responder {
-    let result = database::get_tags_with_urls(db_pool.get_ref()).await;
+    let result = database::get_tags_with_urls_and_snippets(db_pool.get_ref()).await;
 
     match result {
-        Ok(tags_with_urls) => {
-            // Render the HTML with the structured list of tags and their URLs
-            let html = render_html_with_tags_and_urls(&tags_with_urls);
+        Ok(tags_with_urls_and_snippets) => {
+            // Render the HTML with the structured list of tags, URLs, and snippets
+            let html = render_html_with_tags_and_urls_and_snippets(&tags_with_urls_and_snippets);
             HttpResponse::Ok().content_type("text/html").body(html)
         }
         Err(err) => {
-            eprintln!("Failed to fetch tags with URLs: {:?}", err);
-            HttpResponse::InternalServerError().body("Failed to fetch tags with URLs")
+            eprintln!("Failed to fetch tags with URLs and snippets: {:?}", err);
+            HttpResponse::InternalServerError().body("Failed to fetch tags with URLs and snippets")
         }
     }
 }
 
-fn render_html_with_tags_and_urls(tags_with_urls: &[(String, Vec<String>)]) -> String {
+fn render_html_with_tags_and_urls_and_snippets(
+    tags_with_urls_and_snippets: &[database::TagWithUrlsAndSnippets],
+) -> String {
     let mut html = String::from(
         r#"<!DOCTYPE html>
         <html>
@@ -230,6 +234,25 @@ fn render_html_with_tags_and_urls(tags_with_urls: &[(String, Vec<String>)]) -> S
                         alert('An error occurred while deleting the URL');
                     }
                 }
+
+                async function submitDeleteSnippet(event, id) {
+                    event.preventDefault();
+                    try {
+                        const response = await fetch('/snippets/delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id })
+                        });
+                        if (response.ok) {
+                            location.reload();
+                        } else {
+                            alert('Failed to delete snippet');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('An error occurred while deleting the snippet');
+                    }
+                }
             </script>
         </head>
         <body>
@@ -239,16 +262,34 @@ fn render_html_with_tags_and_urls(tags_with_urls: &[(String, Vec<String>)]) -> S
         "#,
     );
     html.push_str("<h1>Tags</h1>");
-    for (tag, urls) in tags_with_urls {
-        html.push_str(&format!("<h2>{}</h2>", tag));
+    for tag_with_urls_and_snippets in tags_with_urls_and_snippets {
+        html.push_str(&format!("<h2>{}</h2>", tag_with_urls_and_snippets.tag));
         html.push_str("<ul>");
-        for url in urls {
+        for url in &tag_with_urls_and_snippets.urls {
+            let display_url = url.split('?').next().unwrap_or(url);
             html.push_str(&format!(
                 r#"<li>
+                    <h3>URL</h3>
                     <button onclick="submitDeleteUrl(event, '{url}')">X</button>
-                    <a href="{url}" target="_blank">{url}</a>
+                    <a href="{url}" target="_blank">{display_url}</a>
                 </li>"#,
-                url = url
+                url = url,
+                display_url = display_url
+            ));
+        }
+        for snippet in &tag_with_urls_and_snippets.snippets {
+            let sanitized_snippet = sanitize_with_allowed_tags(&snippet.snippet);
+            let sanitized_url = sanitize_with_allowed_tags(&snippet.url);
+            html.push_str(&format!(
+                r#"<li>
+                    <h3>Snippet</h3>
+                    <button onclick="submitDeleteSnippet(event, {id})">X</button>
+                    <div>{snippet}</div>
+                    <div>URL: <a href="{url}" target="_blank">{url}</a></div>
+                </li>"#,
+                id = snippet.id,
+                snippet = sanitized_snippet,
+                url = sanitized_url,
             ));
         }
         html.push_str("</ul>");
@@ -358,16 +399,22 @@ fn render_html_with_snippets(snippets_with_tags: &[database::SnippetWithTags]) -
         let sanitized_snippet = sanitize_with_allowed_tags(&snippet_with_tags.snippet);
         let sanitized_url = sanitize_with_allowed_tags(&snippet_with_tags.url);
         let sanitized_tags = sanitize_with_allowed_tags(&snippet_with_tags.tags.join(", "));
+        let display_url = snippet_with_tags
+            .url
+            .split('?')
+            .next()
+            .unwrap_or(&snippet_with_tags.url);
         html.push_str(&format!(
             r#"<li>
                 <button onclick="submitDeleteSnippet(event, {id})">X</button>
                 <div>{snippet}</div>
-                <div>URL: <a href="{url}" target="_blank">{url}</a></div>
+                <div>URL: <a href="{url}" target="_blank">{display_url}</a></div>
                 <div>Tags: {tags}</div>
             </li>"#,
             id = snippet_with_tags.id,
             snippet = sanitized_snippet,
             url = sanitized_url,
+            display_url = display_url,
             tags = sanitized_tags
         ));
     }
