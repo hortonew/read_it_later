@@ -95,6 +95,7 @@ fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
             </script>
         </head>
         <body>
+        <p><a href="/tags">Tags</a></p>
         "#,
     );
     html.push_str("<h1>Read it Later</h1>");
@@ -166,8 +167,77 @@ async fn list_urls_with_tags(db_pool: web::Data<PgPool>) -> impl Responder {
     }
 }
 
+#[get("/tags")]
+async fn tags_page(db_pool: web::Data<PgPool>) -> impl Responder {
+    let result = database::get_tags_with_urls(db_pool.get_ref()).await;
+
+    match result {
+        Ok(tags_with_urls) => {
+            // Render the HTML with the structured list of tags and their URLs
+            let html = render_html_with_tags_and_urls(&tags_with_urls);
+            HttpResponse::Ok().content_type("text/html").body(html)
+        }
+        Err(err) => {
+            eprintln!("Failed to fetch tags with URLs: {:?}", err);
+            HttpResponse::InternalServerError().body("Failed to fetch tags with URLs")
+        }
+    }
+}
+
+fn render_html_with_tags_and_urls(tags_with_urls: &[(String, Vec<String>)]) -> String {
+    let mut html = String::from(
+        r#"<!DOCTYPE html>
+        <html>
+        <head>
+            <title>Tags</title>
+            <meta http-equiv="refresh" content="3">
+            <script>
+                async function submitDeleteUrl(event, url) {
+                    event.preventDefault();
+                    try {
+                        const response = await fetch('/urls/delete/by-url', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url })
+                        });
+                        if (response.ok) {
+                            location.reload();
+                        } else {
+                            alert('Failed to delete URL');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('An error occurred while deleting the URL');
+                    }
+                }
+            </script>
+        </head>
+        <body>
+        <p><a href="/">Home</a></p>
+        "#,
+    );
+    html.push_str("<h1>Tags</h1>");
+    for (tag, urls) in tags_with_urls {
+        html.push_str(&format!("<h2>{}</h2>", tag));
+        html.push_str("<ul>");
+        for url in urls {
+            html.push_str(&format!(
+                r#"<li>
+                    <button onclick="submitDeleteUrl(event, '{url}')">X</button>
+                    <a href="{url}" target="_blank">{url}</a>
+                </li>"#,
+                url = url
+            ));
+        }
+        html.push_str("</ul>");
+    }
+    html.push_str("</body></html>");
+    html
+}
+
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(index)
+        .service(tags_page)
         .service(health)
         .service(list_urls)
         .service(insert_record)

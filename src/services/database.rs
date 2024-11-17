@@ -212,3 +212,26 @@ pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<UrlWithTags>, Er
 
     Ok(results)
 }
+
+/// Fetch tags with their associated URLs
+pub async fn get_tags_with_urls(db_pool: &PgPool) -> Result<Vec<(String, Vec<String>)>, Error> {
+    let query = r#"
+        SELECT tags.tag, COALESCE(ARRAY_AGG(urls.url), ARRAY[]::TEXT[]) AS urls
+        FROM tags
+        LEFT JOIN url_tags ON tags.id = url_tags.tag_id
+        LEFT JOIN urls ON url_tags.url_id = urls.id
+        GROUP BY tags.tag
+        ORDER BY tags.tag
+    "#;
+
+    let rows = sqlx::query(query).fetch_all(db_pool).await?;
+    let mut results = Vec::new();
+
+    for row in rows {
+        let tag: String = row.get("tag");
+        let urls: Vec<String> = row.try_get("urls").unwrap_or_default();
+        results.push((tag, urls));
+    }
+
+    Ok(results)
+}
