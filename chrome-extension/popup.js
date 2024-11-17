@@ -8,12 +8,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const removeButton = document.getElementById("removeUrlButton");
     const tagsInput = document.getElementById("tagsInput");
-    const sendTagsButton = document.getElementById("sendTagsButton");
 
     // Disable buttons initially by removing 'enabled' class
     removeButton.classList.remove("enabled");
     tagsInput.classList.remove("enabled");
-    sendTagsButton.classList.remove("enabled");
 
     // Attempt to send URL
     try {
@@ -25,7 +23,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     // Enable buttons
                     removeButton.classList.add("enabled");
                     tagsInput.classList.add("enabled");
-                    sendTagsButton.classList.add("enabled");
                 } else {
                     statusElement.textContent = `Error: ${response.error}`;
                 }
@@ -74,11 +71,6 @@ document.getElementById("tagsInput").addEventListener("keydown", async function 
             syncTags(); // Sync the updated tags list
         }
     }
-});
-
-// Send all tags handler
-document.getElementById("sendTagsButton").addEventListener("click", async () => {
-    syncTags();
 });
 
 // Function to add a tag to the UI
