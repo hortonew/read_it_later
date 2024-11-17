@@ -128,7 +128,13 @@ async fn delete_record_by_url(db_pool: web::Data<PgPool>, req: web::Json<DeleteU
     let result = database::delete_url_by_url(db_pool.get_ref(), &req.url).await;
 
     match result {
-        Ok(_) => HttpResponse::Ok().json("URL deleted successfully"),
+        Ok(_) => {
+            // Call the background job to remove unused tags
+            if let Err(err) = database::remove_unused_tags(db_pool.get_ref()).await {
+                eprintln!("Failed to remove unused tags: {:?}", err);
+            }
+            HttpResponse::Ok().json("URL deleted successfully")
+        }
         Err(err) => {
             eprintln!("Failed to delete URL: {:?}", err);
             HttpResponse::InternalServerError().json("Failed to delete URL")

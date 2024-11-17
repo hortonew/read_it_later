@@ -162,6 +162,17 @@ pub async fn delete_url_by_url(db_pool: &PgPool, url: &str) -> Result<(), Error>
     Ok(())
 }
 
+/// Remove unused tags from the database
+pub async fn remove_unused_tags(db_pool: &PgPool) -> Result<(), Error> {
+    let query = r#"
+        DELETE FROM tags
+        WHERE id NOT IN (SELECT tag_id FROM url_tags)
+    "#;
+
+    sqlx::query(query).execute(db_pool).await?;
+    Ok(())
+}
+
 /// Struct representing a URL
 #[derive(FromRow, Serialize)]
 pub struct Url {
