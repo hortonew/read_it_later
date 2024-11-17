@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "URL Poster",
-    "version": "1.0",
+    "version": "0.3",
     "description": "Send the current tab's URL to a server.",
     "permissions": [
         "activeTab",

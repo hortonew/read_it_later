@@ -1,6 +1,7 @@
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, App, HttpServer};
 use dotenv::dotenv;
+// use env_logger::Env;
 use std::env;
 mod services;
 use services::{api, caching, database};
@@ -9,6 +10,9 @@ use services::{api, caching, database};
 async fn main() -> std::io::Result<()> {
     // Load the .env file
     dotenv().ok();
+
+    // Initialize the logger
+    // env_logger::init_from_env(Env::default().default_filter_or("info"));
 
     // Read configuration from environment variables
     let port = env::var("WEB_PORT").unwrap_or_else(|_| "8080".to_string());
@@ -24,6 +28,10 @@ async fn main() -> std::io::Result<()> {
     services::database::create_urls_table(&db_pool)
         .await
         .expect("Failed to create `urls` table");
+
+    services::database::create_tags_table(&db_pool)
+        .await
+        .expect("Failed to create `tags` table");
 
     // Initialize Redis client
     let redis_client = caching::initialize_client(&redis_url).expect("Failed to initialize Redis client");

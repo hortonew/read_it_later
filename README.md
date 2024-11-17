@@ -32,6 +32,14 @@ docker compose up
 # navigate to http://localhost:8080/saves
 ```
 
+## Rebuild
+
+Rebuild if there are changes to the sourcecode.
+
+```sh
+docker compose up --build
+```
+
 ## Chrome Extension
 
 1. Go to chrome://extensions/

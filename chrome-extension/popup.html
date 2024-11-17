@@ -1,11 +1,63 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Send URL</title>
+    <title>Read It Later</title>
+    <meta charset="UTF-8">
     <script src="popup.js" defer></script>
+    <style>
+        button, input {
+            opacity: 0.5; /* Initial state: visually disabled */
+            pointer-events: none; /* Prevent interactions */
+        }
+
+        .enabled {
+            opacity: 1; /* Fully visible when enabled */
+            pointer-events: auto; /* Allow interactions */
+        }
+
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        
+        .tag span {
+            margin-right: 5px;
+        }
+        
+        .tag .close {
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            margin-left: 5px;
+            color: #888;
+        }
+        
+        .tag .close:hover {
+            color: #ff0000;
+        }
+    </style>
   </head>
   <body>
-    <button id="sendUrlButton">Send Current URL</button>
+    <h1>Read It Later</h1>
     <p id="status"></p>
+    <button id="removeUrlButton">Remove URL</button>
+    <div id="tagContainer" class="tag-container">
+        <input type="text" id="tagsInput" placeholder="Enter tags, separated by commas" />
+    </div>
+    <button id="sendTagsButton">Send Tags</button>
   </body>
 </html>

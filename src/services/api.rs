@@ -121,11 +121,69 @@ async fn delete_record(db_pool: web::Data<PgPool>, form: web::Form<DeleteUrl>) -
     }
 }
 
+#[derive(Deserialize, Debug)]
+pub struct DeleteUrlByUrl {
+    url: String,
+}
+
+#[post("/urls/delete/by-url")]
+async fn delete_record_by_url(db_pool: web::Data<PgPool>, req: web::Json<DeleteUrlByUrl>) -> impl Responder {
+    println!("Body: {:?}", req);
+
+    let result = database::delete_url_by_url(db_pool.get_ref(), &req.url).await;
+
+    match result {
+        Ok(_) => HttpResponse::Ok().json("URL deleted successfully"),
+        Err(err) => {
+            eprintln!("Failed to delete URL: {:?}", err);
+            HttpResponse::InternalServerError().json("Failed to delete URL")
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UrlTags {
+    url: String,
+    tags: String,
+}
+
+#[post("/urls/tags")]
+async fn insert_tags(db_pool: web::Data<PgPool>, req: web::Json<UrlTags>) -> impl Responder {
+    let result = database::insert_tags(db_pool.get_ref(), &req.url, &req.tags).await;
+
+    match result {
+        Ok(_) => {
+            println!("Tags inserted successfully: {:?}", req.tags);
+            HttpResponse::Ok().json("Tags inserted successfully")
+        }
+        Err(err) => {
+            eprintln!("Failed to insert tags: {:?}", err);
+            HttpResponse::InternalServerError().json("Failed to insert tags")
+        }
+    }
+}
+
+#[get("/urls_with_tags")]
+async fn list_urls_with_tags(db_pool: web::Data<PgPool>) -> impl Responder {
+    let result = database::get_urls_with_tags(db_pool.get_ref()).await;
+
+    match result {
+        Ok(urls_with_tags) => HttpResponse::Ok().json(urls_with_tags),
+        Err(err) => {
+            eprintln!("Failed to fetch URLs with tags: {:?}", err);
+            HttpResponse::InternalServerError().json("Failed to fetch URLs with tags")
+        }
+    }
+}
+
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(index)
         .service(health)
         .service(list_urls)
         .service(insert_record)
+        .service(insert_tags)
+        .service(list_urls_with_tags)
         .service(saves)
-        .service(delete_record);
+        .service(delete_record)
+        .service(delete_record_by_url);
 }
