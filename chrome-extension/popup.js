@@ -128,7 +128,7 @@ async function syncTags() {
             response => {
                 const statusElement = document.getElementById("status");
                 if (response.status === "success") {
-                    statusElement.textContent = "Tags synchronized successfully!";
+                    statusElement.textContent = "Tags added!";
                 } else {
                     statusElement.textContent = `Error: ${response.error}`;
                 }

@@ -46,7 +46,7 @@ docker compose up --build
 2. Enable developer mode
 3. Click "Load Unpacked"
 4. Open the directory "chrome-extension"
-5. Pin the URL Poster app, navigate to a url, and submit a url
+5. Pin the Read it Later app, navigate to a url, and submit a url
 
 ## API
 

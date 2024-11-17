@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "URL Poster",
+    "name": "Read it Later",
     "version": "0.3",
-    "description": "Send the current tab's URL to a server.",
+    "description": "Send URL and tags to Read it Later.",
     "permissions": [
         "activeTab",
         "scripting"
