@@ -1,9 +1,17 @@
 use crate::services::{caching, database};
 use actix_web::{get, post, web, HttpResponse, Responder};
+use ammonia::Builder;
 use redis::Client as RedisClient;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
+
+fn sanitize_with_allowed_tags(input: &str) -> ammonia::Document {
+    Builder::default()
+        .add_tags(["b", "i", "em", "strong", "a"])
+        .add_generic_attributes(["href", "title"])
+        .clean(input)
+}
 
 #[get("/")]
 async fn index(db_pool: web::Data<PgPool>) -> impl Responder {
@@ -104,14 +112,16 @@ fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
     html.push_str("<h1>Read it Later</h1>");
     html.push_str("<ol>");
     for url_with_tags in urls_with_tags {
+        let sanitized_url = sanitize_with_allowed_tags(&url_with_tags.url);
+        let sanitized_tags = sanitize_with_allowed_tags(&url_with_tags.tags.join(", "));
         html.push_str(&format!(
             r#"<li>
                 <button onclick="submitDeleteUrl(event, '{url}')">X</button>
                 <a href="{url}" target="_blank">{url}</a>
                 <div>Tags: {tags}</div>
             </li>"#,
-            url = url_with_tags.url,
-            tags = url_with_tags.tags.join(", ")
+            url = sanitized_url,
+            tags = sanitized_tags
         ));
     }
     html.push_str("</ol>");
@@ -345,6 +355,9 @@ fn render_html_with_snippets(snippets_with_tags: &[database::SnippetWithTags]) -
     html.push_str("<h1>Snippets</h1>");
     html.push_str("<ol>");
     for snippet_with_tags in snippets_with_tags {
+        let sanitized_snippet = sanitize_with_allowed_tags(&snippet_with_tags.snippet);
+        let sanitized_url = sanitize_with_allowed_tags(&snippet_with_tags.url);
+        let sanitized_tags = sanitize_with_allowed_tags(&snippet_with_tags.tags.join(", "));
         html.push_str(&format!(
             r#"<li>
                 <button onclick="submitDeleteSnippet(event, {id})">X</button>
@@ -352,10 +365,10 @@ fn render_html_with_snippets(snippets_with_tags: &[database::SnippetWithTags]) -
                 <div>URL: <a href="{url}" target="_blank">{url}</a></div>
                 <div>Tags: {tags}</div>
             </li>"#,
-            id = snippet_with_tags.id, // Include the `id` in the format string
-            snippet = snippet_with_tags.snippet.replace('"', "&quot;").replace("'", "&#39;"), // Escape quotes
-            url = snippet_with_tags.url,
-            tags = snippet_with_tags.tags.join(", ")
+            id = snippet_with_tags.id,
+            snippet = sanitized_snippet,
+            url = sanitized_url,
+            tags = sanitized_tags
         ));
     }
     html.push_str("</ol>");
