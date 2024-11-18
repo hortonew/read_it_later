@@ -32,14 +32,18 @@
         <h1 class="text-3xl font-bold mb-4">{{ title }}</h1>
         <ol class="list-decimal pl-5">
             {% for url_with_tags in urls_with_tags %}
-                <li class="mb-4">
+                <li class="mb-2 list-none">
                     <div class="bg-white p-4 rounded shadow flex items-center justify-between">
                         <div>
                             <a href="{{ url_with_tags.url }}" target="_blank" class="text-blue-500 hover:underline">{{ url_with_tags.display_url }}</a>
                             {% if url_with_tags.tags and url_with_tags.tags | length > 0 %}
-                                <div>Tags: {{ url_with_tags.tags }}</div>
-                            {% else %}
-                                <div>Tags: []</div>
+                                <div class="flex flex-wrap gap-0.5 mt-0.5">
+                                    {% for tag in url_with_tags.tags %}
+                                    <span class="text-xs px-1 py-0.5 border border-gray-300 bg-gray-100 rounded text-gray-700">
+                                        {{ tag }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
                             {% endif %}
                         </div>
                         <button onclick="submitDeleteUrl(event, '{{ url_with_tags.url }}')" class="text-red-500 hover:text-red-700">X</button>

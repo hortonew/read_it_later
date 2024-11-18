@@ -60,21 +60,22 @@
                         </li>
                     {% endfor %}
                 </ul>
-                <h3 class="text-xl font-medium mb-2">Snippets</h3>
                 <ul class="list-disc pl-5">
                     {% for snippet in tag.snippets %}
-                        <li class="mb-2">
+                        <li class="mb-2 list-none">
                             <div class="bg-white p-4 rounded shadow flex items-center justify-between">
                                 <div>
                                     <div>{{ snippet.snippet }}</div>
                                     <div>URL: <a href="{{ snippet.url }}" target="_blank" class="text-blue-500 hover:underline">{{ snippet.url }}</a></div>
-                                    <div>Tags: 
+                                    <div>
                                         {% if snippet.tags | length > 0 %}
-                                            {% for tag in snippet.tags %}
-                                                {{ tag }}{% if not loop.last %}, {% endif %}
-                                            {% endfor %}
-                                        {% else %}
-                                            []
+                                            <div class="flex flex-wrap gap-0.5 mt-0.5">
+                                                {% for tag in snippet.tags %}
+                                                    <span class="text-xs px-1 py-0.5 border border-gray-300 bg-gray-100 rounded text-gray-700">
+                                                        {{ tag }}
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
                                         {% endif %}
                                     </div>
                                 </div>
