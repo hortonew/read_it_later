@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <meta http-equiv="refresh" content="3">
+    <meta charset="UTF-8">
+</head>
+<body>
+    <p><a href="/">Home</a></p>
+    <p><a href="/tags">Tags</a></p>
+    <p><a href="/snippets">Snippets</a></p>
+    <h1>{{ title }}</h1>
+    {% for tag in tags_with_urls_and_snippets %}
+        <h2>{{ tag.tag }}</h2>
+        <ul>
+            {% for url in tag.urls %}
+                <li>
+                    <a href="{{ url }}" target="_blank">{{ url }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+        <h3>Snippets</h3>
+        <ul>
+            {% for snippet in tag.snippets %}
+                <li>
+                    <div>{{ snippet.snippet }}</div>
+                    <div>URL: <a href="{{ snippet.url }}" target="_blank">{{ snippet.url }}</a></div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endfor %}
+</body>
+</html>

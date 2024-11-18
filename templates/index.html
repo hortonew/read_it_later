@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <meta http-equiv="refresh" content="3">
+    <meta charset="UTF-8">
+    <script>
+        async function submitDeleteUrl(event, url) {
+            event.preventDefault();
+            try {
+                const response = await fetch('/urls/delete/by-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Failed to delete URL');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the URL');
+            }
+        }
+    </script>
+</head>
+<body>
+    <p><a href="/">Home</a></p>
+    <p><a href="/tags">Tags</a></p>
+    <p><a href="/snippets">Snippets</a></p>
+    <h1>{{ title }}</h1>
+    <ol>
+        {% for url_with_tags in urls_with_tags %}
+            <li>
+                <button onclick="submitDeleteUrl(event, '{{ url_with_tags.url }}')">X</button>
+                <a href="{{ url_with_tags.url }}" target="_blank">{{ url_with_tags.display_url }}</a>
+                {% if url_with_tags.tags and url_with_tags.tags | length > 0 %}
+                    <div>Tags: {{ url_with_tags.tags }}</div>
+                {% else %}
+                    <div>Tags: []</div>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ol>
+</body>
+</html>

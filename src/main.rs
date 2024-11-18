@@ -1,8 +1,8 @@
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, App, HttpServer};
 use dotenv::dotenv;
-// use env_logger::Env;
 use std::env;
+use tera::Tera;
 mod services;
 use services::{api, caching, database};
 
@@ -44,6 +44,9 @@ async fn main() -> std::io::Result<()> {
     // Initialize Redis client
     let redis_client = caching::initialize_client(&redis_url).expect("Failed to initialize Redis client");
 
+    // Initialize Tera template engine
+    let tera = Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/**/*")).expect("Failed to initialize Tera");
+
     // Start the Actix Web server
     HttpServer::new(move || {
         App::new()
@@ -51,6 +54,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Cors::default().allow_any_origin().allow_any_method().allow_any_header())
             .app_data(actix_web::web::Data::new(db_pool.clone()))
             .app_data(actix_web::web::Data::new(redis_client.clone()))
+            .app_data(actix_web::web::Data::new(tera.clone()))
             .configure(api::configure_routes) // API routes
     })
     .bind(&bind_address)?

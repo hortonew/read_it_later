@@ -235,14 +235,16 @@ pub async fn get_all_urls(db_pool: &PgPool) -> Result<Vec<Url>, Error> {
     Ok(urls)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct UrlWithTags {
     pub url: String,
     pub tags: Vec<String>,
+    pub display_url: String,
 }
 
 /// Fetch all URLs with their associated tags
-pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<UrlWithTags>, Error> {
+/// Fetch all URLs with their associated tags
+pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<UrlWithTags>, sqlx::Error> {
     let query = r#"
         SELECT urls.url, COALESCE(ARRAY_AGG(tags.tag), ARRAY[]::TEXT[]) AS tags
         FROM urls
@@ -257,8 +259,9 @@ pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<UrlWithTags>, Er
 
     for row in rows {
         let url: String = row.get("url");
-        let tags: Vec<String> = row.try_get("tags").unwrap_or_default();
-        results.push(UrlWithTags { url, tags });
+        let tags: Vec<String> = row.try_get("tags").unwrap_or_default(); // Ensure tags is never null
+        let display_url = url.split('?').next().unwrap_or(url.as_str()).to_string();
+        results.push(UrlWithTags { url, tags, display_url });
     }
 
     Ok(results)
@@ -272,6 +275,7 @@ pub struct SnippetWithTags {
     pub tags: Vec<String>,
 }
 
+#[derive(Serialize)]
 pub struct TagWithUrlsAndSnippets {
     pub tag: String,
     pub urls: Vec<String>,

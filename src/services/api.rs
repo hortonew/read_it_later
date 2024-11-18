@@ -5,6 +5,7 @@ use redis::Client as RedisClient;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
+use tera::{Context, Tera};
 
 fn sanitize_with_allowed_tags(input: &str) -> ammonia::Document {
     Builder::default()
@@ -14,14 +15,38 @@ fn sanitize_with_allowed_tags(input: &str) -> ammonia::Document {
 }
 
 #[get("/")]
-async fn index(db_pool: web::Data<PgPool>) -> impl Responder {
+async fn index(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> impl Responder {
     let result = database::get_urls_with_tags(db_pool.get_ref()).await;
 
     match result {
         Ok(urls_with_tags) => {
-            // Render the HTML with the structured list of URLs and their tags
-            let html = render_html_with_tags(&urls_with_tags);
-            HttpResponse::Ok().content_type("text/html").body(html)
+            // Enrich the data to include display_url
+            let enriched_urls_with_tags: Vec<_> = urls_with_tags
+                .into_iter()
+                .map(|mut url_with_tags| {
+                    url_with_tags.display_url = url_with_tags
+                        .url
+                        .split('?')
+                        .next()
+                        .unwrap_or(&url_with_tags.url)
+                        .to_string();
+                    url_with_tags
+                })
+                .collect();
+
+            // Insert enriched data into the context
+            let mut context = Context::new();
+            context.insert("urls_with_tags", &enriched_urls_with_tags);
+            context.insert("title", "Read it Later");
+
+            // Render the template
+            match tmpl.render("index.html", &context) {
+                Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
+                Err(e) => {
+                    eprintln!("Template error: {:?}", e);
+                    HttpResponse::InternalServerError().body("Template error")
+                }
+            }
         }
         Err(err) => {
             eprintln!("Failed to fetch URLs with tags: {:?}", err);
@@ -72,63 +97,6 @@ async fn list_urls(db_pool: web::Data<PgPool>) -> impl Responder {
             HttpResponse::InternalServerError().json("Failed to fetch URLs")
         }
     }
-}
-
-fn render_html_with_tags(urls_with_tags: &[database::UrlWithTags]) -> String {
-    let mut html = String::from(
-        r#"<!DOCTYPE html>
-        <html>
-        <head>
-            <title>Read it Later</title>
-            <meta http-equiv="refresh" content="3">
-            <meta charset="UTF-8">
-            <script>
-                async function submitDeleteUrl(event, url) {
-                    event.preventDefault();
-                    try {
-                        const response = await fetch('/urls/delete/by-url', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ url })
-                        });
-                        if (response.ok) {
-                            location.reload();
-                        } else {
-                            alert('Failed to delete URL');
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        alert('An error occurred while deleting the URL');
-                    }
-                }
-            </script>
-        </head>
-        <body>
-        <p><a href="/">Home</a></p>
-        <p><a href="/tags">Tags</a></p>
-        <p><a href="/snippets">Snippets</a></p>
-        "#,
-    );
-    html.push_str("<h1>Read it Later</h1>");
-    html.push_str("<ol>");
-    for url_with_tags in urls_with_tags {
-        let sanitized_url = sanitize_with_allowed_tags(&url_with_tags.url);
-        let sanitized_tags = sanitize_with_allowed_tags(&url_with_tags.tags.join(", "));
-        let display_url = url_with_tags.url.split('?').next().unwrap_or(&url_with_tags.url);
-        html.push_str(&format!(
-            r#"<li>
-                <button onclick="submitDeleteUrl(event, '{url}')">X</button>
-                <a href="{url}" target="_blank">{display_url}</a>
-                <div>Tags: {tags}</div>
-            </li>"#,
-            url = sanitized_url,
-            display_url = display_url,
-            tags = sanitized_tags
-        ));
-    }
-    html.push_str("</ol>");
-    html.push_str("</body></html>");
-    html
 }
 
 #[derive(Deserialize, Debug)]
@@ -189,14 +157,22 @@ async fn list_urls_with_tags(db_pool: web::Data<PgPool>) -> impl Responder {
 }
 
 #[get("/tags")]
-async fn tags_page(db_pool: web::Data<PgPool>) -> impl Responder {
+async fn tags_page(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> impl Responder {
     let result = database::get_tags_with_urls_and_snippets(db_pool.get_ref()).await;
 
     match result {
         Ok(tags_with_urls_and_snippets) => {
-            // Render the HTML with the structured list of tags, URLs, and snippets
-            let html = render_html_with_tags_and_urls_and_snippets(&tags_with_urls_and_snippets);
-            HttpResponse::Ok().content_type("text/html").body(html)
+            let mut context = Context::new();
+            context.insert("tags_with_urls_and_snippets", &tags_with_urls_and_snippets);
+            context.insert("title", "Tags");
+
+            match tmpl.render("tags.html", &context) {
+                Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
+                Err(e) => {
+                    eprintln!("Template error: {:?}", e);
+                    HttpResponse::InternalServerError().body("Template error")
+                }
+            }
         }
         Err(err) => {
             eprintln!("Failed to fetch tags with URLs and snippets: {:?}", err);
@@ -205,97 +181,44 @@ async fn tags_page(db_pool: web::Data<PgPool>) -> impl Responder {
     }
 }
 
-fn render_html_with_tags_and_urls_and_snippets(
-    tags_with_urls_and_snippets: &[database::TagWithUrlsAndSnippets],
-) -> String {
-    let mut html = String::from(
-        r#"<!DOCTYPE html>
-        <html>
-        <head>
-            <title>Tags</title>
-            <meta http-equiv="refresh" content="3">
-            <meta charset="UTF-8">
-            <script>
-                async function submitDeleteUrl(event, url) {
-                    event.preventDefault();
-                    try {
-                        const response = await fetch('/urls/delete/by-url', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ url })
-                        });
-                        if (response.ok) {
-                            location.reload();
-                        } else {
-                            alert('Failed to delete URL');
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        alert('An error occurred while deleting the URL');
-                    }
-                }
+#[get("/snippets")]
+async fn snippets_page(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> impl Responder {
+    let result = database::get_snippets_with_tags(db_pool.get_ref()).await;
 
-                async function submitDeleteSnippet(event, id) {
-                    event.preventDefault();
-                    try {
-                        const response = await fetch('/snippets/delete', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id })
-                        });
-                        if (response.ok) {
-                            location.reload();
-                        } else {
-                            alert('Failed to delete snippet');
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        alert('An error occurred while deleting the snippet');
-                    }
+    match result {
+        Ok(snippets_with_tags) => {
+            // Sanitize data
+            let sanitized_snippets: Vec<_> = snippets_with_tags
+                .into_iter()
+                .map(|snippet_with_tags| database::SnippetWithTags {
+                    id: snippet_with_tags.id,
+                    snippet: sanitize_with_allowed_tags(&snippet_with_tags.snippet).to_string(),
+                    url: sanitize_with_allowed_tags(&snippet_with_tags.url).to_string(),
+                    tags: snippet_with_tags
+                        .tags
+                        .into_iter()
+                        .map(|tag| sanitize_with_allowed_tags(&tag).to_string())
+                        .collect(),
+                })
+                .collect();
+
+            let mut context = Context::new();
+            context.insert("snippets_with_tags", &sanitized_snippets);
+            context.insert("title", "Snippets");
+
+            match tmpl.render("snippets.html", &context) {
+                Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
+                Err(e) => {
+                    eprintln!("Template error: {:?}", e);
+                    HttpResponse::InternalServerError().body("Template error")
                 }
-            </script>
-        </head>
-        <body>
-        <p><a href="/">Home</a></p>
-        <p><a href="/tags">Tags</a></p>
-        <p><a href="/snippets">Snippets</a></p>
-        "#,
-    );
-    html.push_str("<h1>Tags</h1>");
-    for tag_with_urls_and_snippets in tags_with_urls_and_snippets {
-        html.push_str(&format!("<h2>{}</h2>", tag_with_urls_and_snippets.tag));
-        html.push_str("<ul>");
-        for url in &tag_with_urls_and_snippets.urls {
-            let display_url = url.split('?').next().unwrap_or(url);
-            html.push_str(&format!(
-                r#"<li>
-                    <h3>URL</h3>
-                    <button onclick="submitDeleteUrl(event, '{url}')">X</button>
-                    <a href="{url}" target="_blank">{display_url}</a>
-                </li>"#,
-                url = url,
-                display_url = display_url
-            ));
+            }
         }
-        for snippet in &tag_with_urls_and_snippets.snippets {
-            let sanitized_snippet = sanitize_with_allowed_tags(&snippet.snippet);
-            let sanitized_url = sanitize_with_allowed_tags(&snippet.url);
-            html.push_str(&format!(
-                r#"<li>
-                    <h3>Snippet</h3>
-                    <button onclick="submitDeleteSnippet(event, {id})">X</button>
-                    <div>{snippet}</div>
-                    <div>URL: <a href="{url}" target="_blank">{url}</a></div>
-                </li>"#,
-                id = snippet.id,
-                snippet = sanitized_snippet,
-                url = sanitized_url,
-            ));
+        Err(err) => {
+            eprintln!("Failed to fetch snippets with tags: {:?}", err);
+            HttpResponse::InternalServerError().body("Failed to fetch snippets with tags")
         }
-        html.push_str("</ul>");
     }
-    html.push_str("</body></html>");
-    html
 }
 
 #[derive(Deserialize)]
@@ -323,23 +246,6 @@ pub struct DeleteSnippet {
     id: i32,
 }
 
-#[get("/snippets")]
-async fn snippets_page(db_pool: web::Data<PgPool>) -> impl Responder {
-    let result = database::get_snippets_with_tags(db_pool.get_ref()).await;
-
-    match result {
-        Ok(snippets_with_tags) => {
-            // Render the HTML with the structured list of snippets and their tags
-            let html = render_html_with_snippets(&snippets_with_tags);
-            HttpResponse::Ok().content_type("text/html").body(html)
-        }
-        Err(err) => {
-            eprintln!("Failed to fetch snippets with tags: {:?}", err);
-            HttpResponse::InternalServerError().body("Failed to fetch snippets with tags")
-        }
-    }
-}
-
 #[post("/snippets/delete")]
 async fn delete_snippet(db_pool: web::Data<PgPool>, req: web::Json<DeleteSnippet>) -> impl Responder {
     println!("Body: {:?}", req);
@@ -355,77 +261,10 @@ async fn delete_snippet(db_pool: web::Data<PgPool>, req: web::Json<DeleteSnippet
     }
 }
 
-fn render_html_with_snippets(snippets_with_tags: &[database::SnippetWithTags]) -> String {
-    let mut html = String::from(
-        r#"<!DOCTYPE html>
-        <html>
-        <head>
-            <title>Snippets</title>
-            <meta http-equiv="refresh" content="3">
-            <meta charset="UTF-8">
-            <script>
-                async function submitDeleteSnippet(event, id) {
-                    event.preventDefault();
-                    console.log('Snippet ID to delete:', id); // Debugging output
-                    try {
-                        const response = await fetch('/snippets/delete', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id })
-                        });
-                        if (response.ok) {
-                            console.log('Snippet deleted successfully'); // Debugging output
-                            location.reload();
-                        } else {
-                            alert('Failed to delete snippet');
-                            console.error('Response error:', response.statusText); // Debugging output
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        alert('An error occurred while deleting the snippet');
-                    }
-                }
-            </script>
-        </head>
-        <body>
-        <p><a href="/">Home</a></p>
-        <p><a href="/tags">Tags</a></p>
-        <p><a href="/snippets">Snippets</a></p>
-        "#,
-    );
-    html.push_str("<h1>Snippets</h1>");
-    html.push_str("<ol>");
-    for snippet_with_tags in snippets_with_tags {
-        let sanitized_snippet = sanitize_with_allowed_tags(&snippet_with_tags.snippet);
-        let sanitized_url = sanitize_with_allowed_tags(&snippet_with_tags.url);
-        let sanitized_tags = sanitize_with_allowed_tags(&snippet_with_tags.tags.join(", "));
-        let display_url = snippet_with_tags
-            .url
-            .split('?')
-            .next()
-            .unwrap_or(&snippet_with_tags.url);
-        html.push_str(&format!(
-            r#"<li>
-                <button onclick="submitDeleteSnippet(event, {id})">X</button>
-                <div>{snippet}</div>
-                <div>URL: <a href="{url}" target="_blank">{display_url}</a></div>
-                <div>Tags: {tags}</div>
-            </li>"#,
-            id = snippet_with_tags.id,
-            snippet = sanitized_snippet,
-            url = sanitized_url,
-            display_url = display_url,
-            tags = sanitized_tags
-        ));
-    }
-    html.push_str("</ol>");
-    html.push_str("</body></html>");
-    html
-}
-
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(index)
         .service(tags_page)
+        .service(snippets_page)
         .service(health)
         .service(list_urls)
         .service(insert_record)
@@ -433,6 +272,5 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .service(list_urls_with_tags)
         .service(delete_record_by_url)
         .service(insert_snippet)
-        .service(snippets_page)
-        .service(delete_snippet); // Add the new route here
+        .service(delete_snippet);
 }

@@ -18,6 +18,7 @@ WORKDIR /app
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/target/release/read_it_later /app/
+COPY templates/ /app/templates/
 
 # Ensure the binary is executable
 RUN chmod +x /app/read_it_later
