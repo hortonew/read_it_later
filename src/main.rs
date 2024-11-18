@@ -25,21 +25,10 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to initialize PostgreSQL pool");
 
-    services::database::create_urls_table(&db_pool)
+    // Initialize all database tables
+    database::initialize_tables(&db_pool)
         .await
-        .expect("Failed to create `urls` table");
-
-    services::database::create_tags_table(&db_pool)
-        .await
-        .expect("Failed to create `tags` table");
-
-    services::database::create_url_tags_table(&db_pool)
-        .await
-        .expect("Failed to create `url_tags` table");
-
-    services::database::create_snippets_table(&db_pool)
-        .await
-        .expect("Failed to create `snippets` table");
+        .expect("Failed to initialize database tables");
 
     // Initialize Redis client
     let redis_client = caching::initialize_client(&redis_url).expect("Failed to initialize Redis client");

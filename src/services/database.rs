@@ -93,6 +93,15 @@ pub async fn create_snippets_table(db_pool: &PgPool) -> Result<(), Error> {
     Ok(())
 }
 
+/// Initialize all database tables
+pub async fn initialize_tables(db_pool: &PgPool) -> Result<(), Error> {
+    create_urls_table(db_pool).await?;
+    create_tags_table(db_pool).await?;
+    create_url_tags_table(db_pool).await?;
+    create_snippets_table(db_pool).await?;
+    Ok(())
+}
+
 /// Hash a URL to create a unique identifier
 fn calculate_url_hash(url: &str) -> String {
     let mut hasher = Sha256::new();
