@@ -23,6 +23,15 @@
     .dark-mode .hover\:underline:hover {
         text-decoration: underline;
     }
+    #filterTags {
+        color: #1f2937; /* Dark gray (Tailwind's gray-800 equivalent) */
+    }
+
+    /* Keep placeholder text styled as default */
+    #filterTags::placeholder {
+        color: #9ca3af; /* Default placeholder gray (Tailwind's gray-400 equivalent) */
+        opacity: 1; /* Ensure placeholder visibility */
+    }
 </style>
 <script>
     // Toggle dark mode
