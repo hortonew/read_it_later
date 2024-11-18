@@ -323,7 +323,18 @@ pub async fn get_tags_with_urls_and_snippets(db_pool: &PgPool) -> Result<Vec<Tag
         LEFT JOIN urls ON url_tags.url_id = urls.id
         LEFT JOIN snippets ON tags.tag = ANY(snippets.tags)
         GROUP BY tags.tag
-        ORDER BY tags.tag
+        UNION
+        SELECT unnest(snippets.tags) AS tag,
+               ARRAY[]::TEXT[] AS urls,
+               ARRAY_AGG(snippets.id) AS snippet_ids
+        FROM snippets
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM tags
+            WHERE tags.tag = ANY(snippets.tags)
+        )
+        GROUP BY tag
+        ORDER BY tag
     "#;
 
     let rows = sqlx::query(query).fetch_all(db_pool).await?;
