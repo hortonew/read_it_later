@@ -7,6 +7,8 @@ An implementation of a read it later or bookmark manager style app (e.g. Pocket,
 - Cache: Redis (not implemented yet)
 - Client: Chrome Extension
 
+![images/saved_urls.png](images/saved_urls.png)
+
 ## Configure
 
 Create .env, updating with your desired users and passwords.
@@ -118,9 +120,6 @@ Start environment
 Chrome Extension: Send URL
 
 ![images/send_url.png](images/send_url.png)
-
-Saved URLs
-![images/saved_urls.png](images/saved_urls.png)
 
 Add a snippet
 ![images/add_snippet.png](images/add_snippet.png)
