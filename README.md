@@ -121,3 +121,9 @@ Chrome Extension: Send URL
 
 Saved URLs
 ![images/saved_urls.png](images/saved_urls.png)
+
+Add a snippet
+![images/add_snippet.png](images/add_snippet.png)
+
+View tags for URLs and Snippets
+![images/urls_and_snippets.png](images/urls_and_snippets.png)
