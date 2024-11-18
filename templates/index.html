@@ -4,6 +4,7 @@
     <title>{{ title }}</title>
     <meta http-equiv="refresh" content="3">
     <meta charset="UTF-8">
+    {% include 'css.html' %} 
     <script>
         async function submitDeleteUrl(event, url) {
             event.preventDefault();
@@ -25,21 +26,27 @@
         }
     </script>
 </head>
-<body>
+<body class="bg-gray-100 text-gray-900">
     {% include 'nav.html' %}
-    <h1>{{ title }}</h1>
-    <ol>
-        {% for url_with_tags in urls_with_tags %}
-            <li>
-                <button onclick="submitDeleteUrl(event, '{{ url_with_tags.url }}')">X</button>
-                <a href="{{ url_with_tags.url }}" target="_blank">{{ url_with_tags.display_url }}</a>
-                {% if url_with_tags.tags and url_with_tags.tags | length > 0 %}
-                    <div>Tags: {{ url_with_tags.tags }}</div>
-                {% else %}
-                    <div>Tags: []</div>
-                {% endif %}
-            </li>
-        {% endfor %}
-    </ol>
+    <div class="container mx-auto p-4">
+        <h1 class="text-3xl font-bold mb-4">{{ title }}</h1>
+        <ol class="list-decimal pl-5">
+            {% for url_with_tags in urls_with_tags %}
+                <li class="mb-4">
+                    <div class="bg-white p-4 rounded shadow flex items-center justify-between">
+                        <div>
+                            <a href="{{ url_with_tags.url }}" target="_blank" class="text-blue-500 hover:underline">{{ url_with_tags.display_url }}</a>
+                            {% if url_with_tags.tags and url_with_tags.tags | length > 0 %}
+                                <div>Tags: {{ url_with_tags.tags }}</div>
+                            {% else %}
+                                <div>Tags: []</div>
+                            {% endif %}
+                        </div>
+                        <button onclick="submitDeleteUrl(event, '{{ url_with_tags.url }}')" class="text-red-500 hover:text-red-700">X</button>
+                    </div>
+                </li>
+            {% endfor %}
+        </ol>
+    </div>
 </body>
 </html>
