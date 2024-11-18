@@ -39,7 +39,9 @@
                             <div>URL: <a href="{{ snippet_with_tags.url }}" target="_blank" class="text-blue-500 hover:underline">{{ snippet_with_tags.url }}</a></div>
                             <div>Tags: 
                                 {% if snippet_with_tags.tags | length > 0 %}
-                                    {{ snippet_with_tags.tags }}
+                                    {% for tag in snippet_with_tags.tags %}
+                                        {{ tag }}{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
                                 {% else %}
                                     []
                                 {% endif %}

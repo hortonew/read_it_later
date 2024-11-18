@@ -68,6 +68,15 @@
                                 <div>
                                     <div>{{ snippet.snippet }}</div>
                                     <div>URL: <a href="{{ snippet.url }}" target="_blank" class="text-blue-500 hover:underline">{{ snippet.url }}</a></div>
+                                    <div>Tags: 
+                                        {% if snippet.tags | length > 0 %}
+                                            {% for tag in snippet.tags %}
+                                                {{ tag }}{% if not loop.last %}, {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            []
+                                        {% endif %}
+                                    </div>
                                 </div>
                                 <button onclick="submitDeleteSnippet(event, {{ snippet.id }})" class="text-red-500 hover:text-red-700">X</button>
                             </div>

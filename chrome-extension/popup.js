@@ -35,6 +35,7 @@ function handleSnippet(tabUrl, snippet, statusElement, tagsInput) {
     // Set up the button click handler for sending snippets
     sendSnippetButton.addEventListener("click", async () => {
         const tags = tagsList.join(",");
+        console.log("Sending snippet with tags:", tags); // Log the tags being sent
 
         try {
             chrome.runtime.sendMessage(
@@ -52,6 +53,14 @@ function handleSnippet(tabUrl, snippet, statusElement, tagsInput) {
         } catch (error) {
             console.error("Failed to send snippet:", error);
             statusElement.textContent = `Error: ${error.message}`;
+        }
+    });
+
+    // Allow submitting snippet by hitting Enter
+    tagsInput.addEventListener("keydown", async function (event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            sendSnippetButton.click();
         }
     });
 }

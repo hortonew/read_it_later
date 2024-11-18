@@ -232,6 +232,9 @@ pub struct NewSnippet {
 async fn insert_snippet(db_pool: web::Data<PgPool>, req: web::Json<NewSnippet>) -> impl Responder {
     let tags: Vec<&str> = req.tags.split(',').map(|tag| tag.trim()).collect();
 
+    // Log the received tags for debugging
+    println!("Received tags for snippet: {:?}", tags);
+
     match database::insert_snippet(db_pool.get_ref(), &req.url, &req.snippet, &tags).await {
         Ok(_) => HttpResponse::Ok().json("Snippet inserted successfully"),
         Err(err) => {
@@ -253,7 +256,13 @@ async fn delete_snippet(db_pool: web::Data<PgPool>, req: web::Json<DeleteSnippet
     let result = database::delete_snippet(db_pool.get_ref(), req.id).await;
 
     match result {
-        Ok(_) => HttpResponse::Ok().json("Snippet deleted successfully"),
+        Ok(_) => {
+            // Call the background job to remove unused tags
+            if let Err(err) = database::remove_unused_tags(db_pool.get_ref()).await {
+                eprintln!("Failed to remove unused tags: {:?}", err);
+            }
+            HttpResponse::Ok().json("Snippet deleted successfully")
+        }
         Err(err) => {
             eprintln!("Failed to delete snippet: {:?}", err);
             HttpResponse::InternalServerError().json("Failed to delete snippet")

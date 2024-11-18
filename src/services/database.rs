@@ -93,12 +93,28 @@ pub async fn create_snippets_table(db_pool: &PgPool) -> Result<(), Error> {
     Ok(())
 }
 
+/// Create the `snippet_tags` join table
+pub async fn create_snippet_tags_table(db_pool: &PgPool) -> Result<(), Error> {
+    let query = r#"
+        CREATE TABLE IF NOT EXISTS snippet_tags (
+            id SERIAL PRIMARY KEY,
+            snippet_id INTEGER NOT NULL REFERENCES snippets(id) ON DELETE CASCADE,
+            tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+            UNIQUE (snippet_id, tag_id)
+        )
+    "#;
+
+    sqlx::query(query).execute(db_pool).await?;
+    Ok(())
+}
+
 /// Initialize all database tables
 pub async fn initialize_tables(db_pool: &PgPool) -> Result<(), Error> {
     create_urls_table(db_pool).await?;
     create_tags_table(db_pool).await?;
     create_url_tags_table(db_pool).await?;
     create_snippets_table(db_pool).await?;
+    create_snippet_tags_table(db_pool).await?;
     Ok(())
 }
 
@@ -144,6 +160,41 @@ pub async fn insert_snippet(db_pool: &PgPool, url: &str, snippet: &str, tags: &[
         .bind(tags)
         .fetch_one(db_pool)
         .await?;
+
+    // Ensure tags are added to the tags table and linked to the snippet
+    for tag in tags {
+        let tag_query = r#"
+            INSERT INTO tags (tag)
+            VALUES ($1)
+            ON CONFLICT (tag) DO NOTHING
+            RETURNING id
+        "#;
+
+        let tag_id: i32 = match sqlx::query_scalar(tag_query).bind(tag).fetch_one(db_pool).await {
+            Ok(id) => id,
+            Err(sqlx::Error::RowNotFound) => {
+                // If the tag exists but isn't returned, fetch its ID directly
+                sqlx::query_scalar("SELECT id FROM tags WHERE tag = $1")
+                    .bind(tag)
+                    .fetch_one(db_pool)
+                    .await?
+            }
+            Err(err) => return Err(err),
+        };
+
+        // Link the snippet and tag in the `snippet_tags` table
+        let snippet_tag_query = r#"
+            INSERT INTO snippet_tags (snippet_id, tag_id)
+            VALUES ($1, $2)
+            ON CONFLICT (snippet_id, tag_id) DO NOTHING
+        "#;
+
+        sqlx::query(snippet_tag_query)
+            .bind(snippet_id)
+            .bind(tag_id)
+            .execute(db_pool)
+            .await?;
+    }
 
     Ok(snippet_id)
 }
@@ -216,6 +267,7 @@ pub async fn remove_unused_tags(db_pool: &PgPool) -> Result<(), Error> {
     let query = r#"
         DELETE FROM tags
         WHERE id NOT IN (SELECT tag_id FROM url_tags)
+          AND id NOT IN (SELECT tag_id FROM snippet_tags)
     "#;
 
     sqlx::query(query).execute(db_pool).await?;
@@ -321,7 +373,8 @@ pub async fn get_tags_with_urls_and_snippets(db_pool: &PgPool) -> Result<Vec<Tag
         FROM tags
         LEFT JOIN url_tags ON tags.id = url_tags.tag_id
         LEFT JOIN urls ON url_tags.url_id = urls.id
-        LEFT JOIN snippets ON tags.tag = ANY(snippets.tags)
+        LEFT JOIN snippet_tags ON tags.id = snippet_tags.tag_id
+        LEFT JOIN snippets ON snippet_tags.snippet_id = snippets.id
         GROUP BY tags.tag
         UNION
         SELECT unnest(snippets.tags) AS tag,

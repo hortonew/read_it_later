@@ -61,6 +61,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         return true;
     } else if (message.action === "sendSnippet") {
+        console.log("Sending snippet with tags:", message.tags); // Log the tags being sent
+
         fetch("http://localhost:8080/snippets", {
             method: "POST",
             headers: {
