@@ -1,35 +1,134 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>{{ title }}</title>
-    <!--<meta http-equiv="refresh" content="3">-->
-    <meta charset="UTF-8">
-    {% include 'css.html' %} 
-    <script>
-        // Function to filter tags
-        function filterTags() {
-            const filterInput = document.getElementById('filterTags').value.toLowerCase().trim();
-            const filterTags = filterInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-            const tagSections = document.querySelectorAll('.tag-section');
-        
-            tagSections.forEach(section => {
-                const tags = section.dataset.tags.split(',').map(tag => tag.trim().toLowerCase());
-        
-                // If input is empty, show all sections
-                if (filterTags.length === 0) {
-                    section.style.display = ''; // Show all
-                } else {
-                    // Check for fuzzy matching
-                    const matches = filterTags.some(filterTag =>
-                        tags.some(tag => tag.includes(filterTag))
-                    );
-                    section.style.display = matches ? '' : 'none';
-                }
+    <head>
+        <title>{{ title }}</title>
+        <meta charset="UTF-8">
+        {% include 'css.html' %}
+        <script>
+            const EXPAND_THRESHOLD = 5; // Number of tags to determine if they should be expanded by default
+
+            // Function to filter tags
+            function filterTags() {
+                const filterInput = document.getElementById('filterTags').value.toLowerCase().trim();
+                const filterTags = filterInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+                const tagSections = document.querySelectorAll('.tag-section');
+
+                tagSections.forEach(section => {
+                    const tags = section.dataset.tags.split(',').map(tag => tag.trim().toLowerCase());
+
+                    // If input is empty, show all sections
+                    if (filterTags.length === 0) {
+                        section.style.display = ''; // Show all
+                    } else {
+                        // Check for fuzzy matching
+                        const matches = filterTags.some(filterTag =>
+                            tags.some(tag => tag.includes(filterTag))
+                        );
+                        section.style.display = matches ? '' : 'none';
+                    }
+                });
+            }
+
+            // Function to toggle the visibility of a tag section
+            function toggleTagSection(event) {
+                const content = event.currentTarget.nextElementSibling;
+                const isVisible = content.style.display === '' || content.style.display === 'block';
+                content.style.display = isVisible ? 'none' : 'block';
+
+                const counts = content.dataset;
+                event.currentTarget.querySelector('.counts').textContent =
+                    isVisible
+                    ? `(URLs: ${counts.urls}, Snippets: ${counts.snippets})`
+                    : '';
+            }
+
+            // Initialize the page on load
+            document.addEventListener('DOMContentLoaded', () => {
+                const tagSections = document.querySelectorAll('.tag-section');
+                const shouldExpand = tagSections.length < EXPAND_THRESHOLD; // Expand if fewer than the threshold
+
+                tagSections.forEach(section => {
+                    const header = section.querySelector('h2');
+                    const content = header.nextElementSibling;
+                    const counts = content.dataset;
+
+                    if (shouldExpand) {
+                        content.style.display = 'block'; // Expanded
+                        header.querySelector('.counts').textContent = '';
+                    } else {
+                        content.style.display = 'none'; // Collapsed
+                        header.querySelector('.counts').textContent = `(URLs: ${counts.urls}, Snippets: ${counts.snippets})`;
+                    }
+                });
             });
-        }
+
+            // Function to delete a URL
+            async function submitDeleteUrl(event, url) {
+                event.preventDefault();
+                event.stopPropagation(); // Prevent toggle when clicking delete
+                try {
+                    const response = await fetch('/urls/delete/by-url', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        alert('Failed to delete URL');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while deleting the URL');
+                }
+            }
+
+            // Function to delete a snippet
+            async function submitDeleteSnippet(event, snippetId) {
+                event.preventDefault();
+                event.stopPropagation(); // Prevent toggle when clicking delete
+                try {
+                    const response = await fetch('/snippets/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: snippetId })
+                    });
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        alert('Failed to delete snippet');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while deleting the snippet');
+                }
+            }
+            let allExpanded = false; // Track whether all tags are currently expanded
+
+            // Function to toggle all tag sections
+            function toggleAllTags() {
+                const tagSections = document.querySelectorAll('.tag-section');
+                allExpanded = !allExpanded;
         
-    </script>
-</head>
+                tagSections.forEach(section => {
+                    const content = section.querySelector('div');
+                    const counts = content.dataset;
+
+                    if (allExpanded) {
+                        content.style.display = 'block'; // Expand
+                        section.querySelector('.counts').textContent = '';
+                    } else {
+                        content.style.display = 'none'; // Collapse
+                        section.querySelector('.counts').textContent = `(URLs: ${counts.urls}, Snippets: ${counts.snippets})`;
+                    }
+                });
+
+                // Update button text
+                const button = document.getElementById('toggleTagsButton');
+                button.textContent = allExpanded ? 'Collapse All' : 'Expand All';
+            }
+        </script>
+    </head>
 <body class="bg-gray-100 text-gray-900 dark-mode">
     {% include 'nav.html' %}
     <div class="container mx-auto p-4">
@@ -37,46 +136,58 @@
 
         <!-- Filter Input Box -->
         <div class="mb-4">
-            <!-- <label for="filterTags" class="block text-sm font-medium text-gray-700">Filter by Tags (comma-separated):</label> -->
             <input id="filterTags" type="text" oninput="filterTags()" class="mt-1 p-2 border border-gray-300 rounded w-full" placeholder="Enter tags to filter, comma-separated (e.g. social,LLM)">
+        </div>
+
+        <div class="mb-4 flex justify-start">
+            <button id="toggleTagsButton" onclick="toggleAllTags()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700">
+                Expand All
+            </button>
         </div>
 
         <!-- Tag Sections -->
         {% for tag in tags_with_urls_and_snippets %}
             <div class="tag-section mb-6" data-tags="{{ tag.tag }}">
-                <h2 class="text-2xl font-semibold mb-2">{{ tag.tag }}</h2>
-                <ul class="list-disc pl-5 mb-4">
-                    {% for url in tag.urls %}
-                        <li class="flex items-center">
-                            <a href="{{ url }}" target="_blank" class="text-blue-500 hover:underline flex-grow">{{ url }}</a>
-                            <button onclick="submitDeleteUrl(event, '{{ url }}')" class="text-red-500 hover:text-red-700 ml-2">X</button>
-                        </li>
-                    {% endfor %}
-                </ul>
-                <ul class="list-disc pl-5">
-                    {% for snippet in tag.snippets %}
-                        <li class="mb-2 list-none">
-                            <div class="bg-white p-4 rounded shadow flex items-center justify-between">
-                                <div>
-                                    <div>{{ snippet.snippet }}</div>
-                                    <div>URL: <a href="{{ snippet.url }}" target="_blank" class="text-blue-500 hover:underline">{{ snippet.url }}</a></div>
+                <h2
+                    class="text-2xl font-semibold mb-2 cursor-pointer"
+                    onclick="toggleTagSection(event)">
+                    {{ tag.tag }}
+                    <span class="counts"></span>
+                </h2>
+                <div data-urls="{{ tag.urls | length }}" data-snippets="{{ tag.snippets | length }}">
+                    <ul class="list-disc pl-5 mb-4">
+                        {% for url in tag.urls %}
+                            <li class="flex items-center">
+                                <a href="{{ url }}" target="_blank" class="text-blue-500 hover:underline flex-grow">{{ url }}</a>
+                                <button onclick="submitDeleteUrl(event, '{{ url }}')" class="text-red-500 hover:text-red-700 ml-2">X</button>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    <ul class="list-disc pl-5">
+                        {% for snippet in tag.snippets %}
+                            <li class="mb-2 list-none">
+                                <div class="bg-white p-4 rounded shadow flex items-center justify-between">
                                     <div>
-                                        {% if snippet.tags | length > 0 %}
-                                            <div class="flex flex-wrap gap-0.5 mt-0.5">
-                                                {% for tag in snippet.tags %}
-                                                    <span class="text-xs px-1 py-0.5 border border-gray-300 bg-gray-100 rounded text-gray-700">
-                                                        {{ tag }}
-                                                    </span>
-                                                {% endfor %}
-                                            </div>
-                                        {% endif %}
+                                        <div>{{ snippet.snippet }}</div>
+                                        <div>URL: <a href="{{ snippet.url }}" target="_blank" class="text-blue-500 hover:underline">{{ snippet.url }}</a></div>
+                                        <div>
+                                            {% if snippet.tags | length > 0 %}
+                                                <div class="flex flex-wrap gap-0.5 mt-0.5">
+                                                    {% for tag in snippet.tags %}
+                                                        <span class="text-xs px-1 py-0.5 border border-gray-300 bg-gray-100 rounded text-gray-700">
+                                                            {{ tag }}
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
                                     </div>
+                                    <button onclick="submitDeleteSnippet(event, {{ snippet.id }})" class="text-red-500 hover:text-red-700">X</button>
                                 </div>
-                                <button onclick="submitDeleteSnippet(event, {{ snippet.id }})" class="text-red-500 hover:text-red-700">X</button>
-                            </div>
-                        </li>
-                    {% endfor %}
-                </ul>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
         {% endfor %}
     </div>
