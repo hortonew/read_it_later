@@ -1,1 +1,42 @@
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<style>
+    /* Dark mode styles */
+    body.dark-mode {
+        background-color: #1a202c;
+        color: #cbd5e0;
+    }
+    .dark-mode .bg-white {
+        background-color: #2d3748;
+    }
+    .dark-mode .text-blue-500 {
+        color: #63b3ed;
+    }
+    .dark-mode .text-red-500 {
+        color: #fc8181;
+    }
+    .dark-mode .text-red-700 {
+        color: #e53e3e;
+    }
+    .dark-mode .hover\:text-red-700:hover {
+        color: #e53e3e;
+    }
+    .dark-mode .hover\:underline:hover {
+        text-decoration: underline;
+    }
+</style>
+<script>
+    // Toggle dark mode
+    function toggleDarkMode() {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('dark-mode', document.body.classList.contains('dark-mode'));
+    }
+
+    // Set dark mode based on local storage
+    document.addEventListener('DOMContentLoaded', () => {
+        if (localStorage.getItem('dark-mode') === 'true') {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.add('dark-mode'); // Default to dark mode
+        }
+    });
+</script>
