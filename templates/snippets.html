@@ -6,9 +6,7 @@
     <meta charset="UTF-8">
 </head>
 <body>
-    <p><a href="/">Home</a></p>
-    <p><a href="/tags">Tags</a></p>
-    <p><a href="/snippets">Snippets</a></p>
+    {% include 'nav.html' %}
     <h1>{{ title }}</h1>
     <ol>
         {% for snippet_with_tags in snippets_with_tags %}
