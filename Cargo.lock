@@ -1967,6 +1967,7 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "ammonia",
+ "async-trait",
  "chrono",
  "dotenv",
  "env_logger",

@@ -1,10 +1,10 @@
-use crate::services::{caching, database};
+use crate::services::{caching, models};
 use actix_web::{get, post, web, HttpResponse, Responder};
 use ammonia::Builder;
 use redis::Client as RedisClient;
 use serde::Deserialize;
 use serde_json::json;
-use sqlx::PgPool;
+use std::sync::Arc;
 use tera::{Context, Tera};
 
 fn sanitize_with_allowed_tags(input: &str) -> ammonia::Document {
@@ -15,8 +15,8 @@ fn sanitize_with_allowed_tags(input: &str) -> ammonia::Document {
 }
 
 #[get("/")]
-async fn index(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> impl Responder {
-    let result = database::get_urls_with_tags(db_pool.get_ref()).await;
+async fn index(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Data<Tera>) -> impl Responder {
+    let result = database.get_urls_with_tags().await;
 
     match result {
         Ok(urls_with_tags) => {
@@ -56,8 +56,11 @@ async fn index(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> impl Respon
 }
 
 #[get("/health")]
-async fn health(db_pool: web::Data<PgPool>, redis_client: web::Data<RedisClient>) -> impl Responder {
-    let db_status = database::check_health(db_pool.get_ref()).await;
+async fn health(
+    database: web::Data<Arc<dyn models::Database>>,
+    redis_client: web::Data<RedisClient>,
+) -> impl Responder {
+    let db_status = database.check_health().await;
     let redis_status = caching::check_health(redis_client.get_ref()).await;
 
     let health_response = json!({
@@ -75,8 +78,8 @@ pub struct NewUrl {
 }
 
 #[post("/urls/url")]
-async fn insert_record(db_pool: web::Data<PgPool>, req: web::Json<NewUrl>) -> impl Responder {
-    match database::insert_url(db_pool.get_ref(), &req.url).await {
+async fn insert_record(database: web::Data<Arc<dyn models::Database>>, req: web::Json<NewUrl>) -> impl Responder {
+    match database.insert_url(&req.url).await {
         Ok(_) => HttpResponse::Ok().json("Record inserted successfully"),
         Err(sqlx::Error::RowNotFound) => HttpResponse::Conflict().json("Record already exists"),
         Err(err) => {
@@ -87,8 +90,8 @@ async fn insert_record(db_pool: web::Data<PgPool>, req: web::Json<NewUrl>) -> im
 }
 
 #[get("/urls")]
-async fn list_urls(db_pool: web::Data<PgPool>) -> impl Responder {
-    let result = database::get_all_urls(db_pool.get_ref()).await;
+async fn list_urls(database: web::Data<Arc<dyn models::Database>>) -> impl Responder {
+    let result = database.get_all_urls().await;
 
     match result {
         Ok(urls) => HttpResponse::Ok().json(urls), // Serialize and return the list of URLs
@@ -105,15 +108,18 @@ pub struct DeleteUrlByUrl {
 }
 
 #[post("/urls/delete/by-url")]
-async fn delete_record_by_url(db_pool: web::Data<PgPool>, req: web::Json<DeleteUrlByUrl>) -> impl Responder {
+async fn delete_record_by_url(
+    database: web::Data<Arc<dyn models::Database>>,
+    req: web::Json<DeleteUrlByUrl>,
+) -> impl Responder {
     println!("Body: {:?}", req);
 
-    let result = database::delete_url_by_url(db_pool.get_ref(), &req.url).await;
+    let result = database.delete_url_by_url(&req.url).await;
 
     match result {
         Ok(_) => {
             // Call the background job to remove unused tags
-            if let Err(err) = database::remove_unused_tags(db_pool.get_ref()).await {
+            if let Err(err) = database.remove_unused_tags().await {
                 eprintln!("Failed to remove unused tags: {:?}", err);
             }
             HttpResponse::Ok().json("URL deleted successfully")
@@ -125,17 +131,14 @@ async fn delete_record_by_url(db_pool: web::Data<PgPool>, req: web::Json<DeleteU
     }
 }
 
-#[derive(Deserialize)]
-pub struct UrlTags {
-    url: String,
-    tags: String,
-}
-
 #[post("/urls/tags")]
-async fn insert_tags(db_pool: web::Data<PgPool>, req: web::Json<UrlTags>) -> impl Responder {
+async fn insert_tags(
+    database: web::Data<Arc<dyn models::Database>>,
+    req: web::Json<models::UrlTags>,
+) -> impl Responder {
     let tags: Vec<&str> = req.tags.split(',').map(|tag| tag.trim()).collect();
 
-    match database::insert_tags(db_pool.get_ref(), &req.url, &tags).await {
+    match database.insert_tags(&req.url, &tags).await {
         Ok(_) => HttpResponse::Ok().json("Tags inserted successfully"),
         Err(sqlx::Error::RowNotFound) => HttpResponse::Conflict().json("One or more tags already exist for this URL"),
         Err(err) => {
@@ -146,8 +149,8 @@ async fn insert_tags(db_pool: web::Data<PgPool>, req: web::Json<UrlTags>) -> imp
 }
 
 #[get("/urls_with_tags")]
-async fn list_urls_with_tags(db_pool: web::Data<PgPool>) -> impl Responder {
-    match database::get_urls_with_tags(db_pool.get_ref()).await {
+async fn list_urls_with_tags(database: web::Data<Arc<dyn models::Database>>) -> impl Responder {
+    match database.get_urls_with_tags().await {
         Ok(urls_with_tags) => HttpResponse::Ok().json(urls_with_tags),
         Err(err) => {
             eprintln!("Failed to fetch URLs with tags: {:?}", err);
@@ -157,8 +160,8 @@ async fn list_urls_with_tags(db_pool: web::Data<PgPool>) -> impl Responder {
 }
 
 #[get("/tags")]
-async fn tags_page(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> impl Responder {
-    let result = database::get_tags_with_urls_and_snippets(db_pool.get_ref()).await;
+async fn tags_page(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Data<Tera>) -> impl Responder {
+    let result = database.get_tags_with_urls_and_snippets().await;
 
     match result {
         Ok(tags_with_urls_and_snippets) => {
@@ -182,15 +185,15 @@ async fn tags_page(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> impl Re
 }
 
 #[get("/snippets")]
-async fn snippets_page(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> impl Responder {
-    let result = database::get_snippets_with_tags(db_pool.get_ref()).await;
+async fn snippets_page(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Data<Tera>) -> impl Responder {
+    let result = database.get_snippets_with_tags().await;
 
     match result {
         Ok(snippets_with_tags) => {
             // Sanitize data
             let sanitized_snippets: Vec<_> = snippets_with_tags
                 .into_iter()
-                .map(|snippet_with_tags| database::SnippetWithTags {
+                .map(|snippet_with_tags| models::SnippetWithTags {
                     id: snippet_with_tags.id,
                     snippet: sanitize_with_allowed_tags(&snippet_with_tags.snippet).to_string(),
                     url: sanitize_with_allowed_tags(&snippet_with_tags.url).to_string(),
@@ -221,21 +224,17 @@ async fn snippets_page(db_pool: web::Data<PgPool>, tmpl: web::Data<Tera>) -> imp
     }
 }
 
-#[derive(Deserialize)]
-pub struct NewSnippet {
-    url: String,
-    snippet: String,
-    tags: String,
-}
-
 #[post("/snippets")]
-async fn insert_snippet(db_pool: web::Data<PgPool>, req: web::Json<NewSnippet>) -> impl Responder {
+async fn insert_snippet(
+    database: web::Data<Arc<dyn models::Database>>,
+    req: web::Json<models::NewSnippet>,
+) -> impl Responder {
     let tags: Vec<&str> = req.tags.split(',').map(|tag| tag.trim()).collect();
 
     // Log the received tags for debugging
     println!("Received tags for snippet: {:?}", tags);
 
-    match database::insert_snippet(db_pool.get_ref(), &req.url, &req.snippet, &tags).await {
+    match database.insert_snippet(&req.url, &req.snippet, &tags).await {
         Ok(_) => HttpResponse::Ok().json("Snippet inserted successfully"),
         Err(err) => {
             eprintln!("Failed to insert snippet: {:?}", err);
@@ -244,21 +243,19 @@ async fn insert_snippet(db_pool: web::Data<PgPool>, req: web::Json<NewSnippet>) 
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub struct DeleteSnippet {
-    id: i32,
-}
-
 #[post("/snippets/delete")]
-async fn delete_snippet(db_pool: web::Data<PgPool>, req: web::Json<DeleteSnippet>) -> impl Responder {
+async fn delete_snippet(
+    database: web::Data<Arc<dyn models::Database>>,
+    req: web::Json<models::DeleteSnippet>,
+) -> impl Responder {
     println!("Body: {:?}", req);
 
-    let result = database::delete_snippet(db_pool.get_ref(), req.id).await;
+    let result = database.delete_snippet(req.id).await;
 
     match result {
         Ok(_) => {
             // Call the background job to remove unused tags
-            if let Err(err) = database::remove_unused_tags(db_pool.get_ref()).await {
+            if let Err(err) = database.remove_unused_tags().await {
                 eprintln!("Failed to remove unused tags: {:?}", err);
             }
             HttpResponse::Ok().json("Snippet deleted successfully")

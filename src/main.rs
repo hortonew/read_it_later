@@ -4,7 +4,8 @@ use dotenv::dotenv;
 use std::env;
 use tera::Tera;
 mod services;
-use services::{api, caching, database};
+use services::{api, caching, database, models, sqlite_database};
+use std::sync::Arc;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -17,18 +18,21 @@ async fn main() -> std::io::Result<()> {
     // Read configuration from environment variables
     let port = env::var("WEB_PORT").unwrap_or_else(|_| "8080".to_string());
     let bind_address = format!("0.0.0.0:{}", port);
-    let postgres_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
 
-    // Initialize PostgreSQL pool
-    let db_pool = database::initialize_pool(&postgres_url)
-        .await
-        .expect("Failed to initialize PostgreSQL pool");
+    let database_type = env::var("DATABASE_TYPE").unwrap_or_else(|_| "postgres".to_string());
+    let database_url = match database_type.as_str() {
+        "sqlite" => env::var("SQLITE_URL").expect("SQLITE_URL must be set for SQLite"),
+        _ => env::var("DATABASE_URL").expect("DATABASE_URL must be set for PostgreSQL"),
+    };
 
-    // Initialize all database tables
-    database::initialize_tables(&db_pool)
-        .await
-        .expect("Failed to initialize database tables");
+    let database: Arc<dyn models::Database> = match database_type.as_str() {
+        "sqlite" => Arc::new(sqlite_database::SqliteDatabase::new(&database_url).await.unwrap()),
+        _ => Arc::new(database::PostgresDatabase::new(&database_url).await.unwrap()),
+    };
+
+    // Initialize DB pool
+    database.initialize().await.expect("Failed to initialize database");
 
     // Initialize Redis client
     let redis_client = caching::initialize_client(&redis_url).expect("Failed to initialize Redis client");
@@ -41,7 +45,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Logger::default())
             .wrap(Cors::default().allow_any_origin().allow_any_method().allow_any_header())
-            .app_data(actix_web::web::Data::new(db_pool.clone()))
+            .app_data(actix_web::web::Data::new(database.clone()))
             .app_data(actix_web::web::Data::new(redis_client.clone()))
             .app_data(actix_web::web::Data::new(tera.clone()))
             .configure(api::configure_routes) // API routes

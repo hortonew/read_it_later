@@ -1,11 +1,67 @@
-use chrono;
-use serde::Serialize;
+use crate::services::models;
 use sha2::{Digest, Sha256};
-use sqlx::{Error, FromRow, PgPool, Row};
+use sqlx::{Error, PgPool, Row};
 
-/// Initialize the PostgreSQL connection pool
-pub async fn initialize_pool(postgres_url: &str) -> Result<PgPool, Error> {
-    PgPool::connect(postgres_url).await
+pub struct PostgresDatabase {
+    pool: PgPool,
+}
+
+impl PostgresDatabase {
+    pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
+        let pool = sqlx::PgPool::connect(database_url).await?;
+        Ok(Self { pool })
+    }
+}
+
+#[async_trait::async_trait]
+impl models::Database for PostgresDatabase {
+    async fn initialize(&self) -> Result<(), sqlx::Error> {
+        initialize_tables(&self.pool).await
+    }
+
+    async fn check_health(&self) -> &'static str {
+        check_health(&self.pool).await
+    }
+
+    async fn insert_url(&self, url: &str) -> Result<i32, sqlx::Error> {
+        insert_url(&self.pool, url).await
+    }
+
+    async fn get_urls_with_tags(&self) -> Result<Vec<models::UrlWithTags>, sqlx::Error> {
+        get_urls_with_tags(&self.pool).await
+    }
+
+    async fn insert_snippet(&self, url: &str, snippet: &str, tags: &[&str]) -> Result<i32, sqlx::Error> {
+        insert_snippet(&self.pool, url, snippet, tags).await
+    }
+
+    async fn get_all_urls(&self) -> Result<Vec<models::Url>, sqlx::Error> {
+        get_all_urls(&self.pool).await
+    }
+
+    async fn delete_url_by_url(&self, url: &str) -> Result<(), sqlx::Error> {
+        delete_url_by_url(&self.pool, url).await
+    }
+
+    async fn insert_tags(&self, url: &str, tags: &[&str]) -> Result<(), sqlx::Error> {
+        insert_tags(&self.pool, url, tags).await
+    }
+
+    async fn remove_unused_tags(&self) -> Result<(), sqlx::Error> {
+        remove_unused_tags(&self.pool).await
+    }
+
+    async fn delete_snippet(&self, snippet_id: i32) -> Result<(), sqlx::Error> {
+        delete_snippet(&self.pool, snippet_id).await
+    }
+
+    async fn get_snippets_with_tags(&self) -> Result<Vec<models::SnippetWithTags>, sqlx::Error> {
+        get_snippets_with_tags(&self.pool).await
+    }
+
+    async fn get_tags_with_urls_and_snippets(&self) -> Result<Vec<models::TagWithUrlsAndSnippets>, sqlx::Error> {
+        get_tags_with_urls_and_snippets(&self.pool).await
+    }
 }
 
 /// Check if the database connection is healthy
@@ -274,38 +330,22 @@ pub async fn remove_unused_tags(db_pool: &PgPool) -> Result<(), Error> {
     Ok(())
 }
 
-/// Struct representing a URL
-#[derive(FromRow, Serialize)]
-pub struct Url {
-    pub id: i32,
-    pub datetime: chrono::NaiveDateTime,
-    pub url: String,
-    pub url_hash: String,
-}
-
 /// Fetch all URLs from the database
-pub async fn get_all_urls(db_pool: &PgPool) -> Result<Vec<Url>, Error> {
+pub async fn get_all_urls(db_pool: &PgPool) -> Result<Vec<models::Url>, Error> {
     let query = r#"
         SELECT id, datetime, url, url_hash
         FROM urls
         ORDER BY datetime DESC
     "#;
 
-    let urls = sqlx::query_as::<_, Url>(query).fetch_all(db_pool).await?;
+    let urls = sqlx::query_as::<_, models::Url>(query).fetch_all(db_pool).await?;
 
     Ok(urls)
 }
 
-#[derive(Serialize, Debug)]
-pub struct UrlWithTags {
-    pub url: String,
-    pub tags: Vec<String>,
-    pub display_url: String,
-}
-
 /// Fetch all URLs with their associated tags
 /// Fetch all URLs with their associated tags
-pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<UrlWithTags>, sqlx::Error> {
+pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<models::UrlWithTags>, sqlx::Error> {
     let query = r#"
         SELECT urls.url, COALESCE(ARRAY_AGG(tags.tag), ARRAY[]::TEXT[]) AS tags
         FROM urls
@@ -322,29 +362,14 @@ pub async fn get_urls_with_tags(db_pool: &PgPool) -> Result<Vec<UrlWithTags>, sq
         let url: String = row.get("url");
         let tags: Vec<String> = row.try_get("tags").unwrap_or_default(); // Ensure tags is never null
         let display_url = url.split('?').next().unwrap_or(url.as_str()).to_string();
-        results.push(UrlWithTags { url, tags, display_url });
+        results.push(models::UrlWithTags { url, tags, display_url });
     }
 
     Ok(results)
 }
 
-#[derive(FromRow, Serialize)]
-pub struct SnippetWithTags {
-    pub id: i32,
-    pub snippet: String,
-    pub url: String,
-    pub tags: Vec<String>,
-}
-
-#[derive(Serialize)]
-pub struct TagWithUrlsAndSnippets {
-    pub tag: String,
-    pub urls: Vec<String>,
-    pub snippets: Vec<SnippetWithTags>,
-}
-
 /// Fetch all snippets with their associated tags
-pub async fn get_snippets_with_tags(db_pool: &PgPool) -> Result<Vec<SnippetWithTags>, Error> {
+pub async fn get_snippets_with_tags(db_pool: &PgPool) -> Result<Vec<models::SnippetWithTags>, Error> {
     let query = r#"
         SELECT id, snippet, url, COALESCE(tags, ARRAY[]::TEXT[]) AS tags
         FROM snippets
@@ -359,13 +384,13 @@ pub async fn get_snippets_with_tags(db_pool: &PgPool) -> Result<Vec<SnippetWithT
         let snippet: String = row.get("snippet");
         let url: String = row.get("url");
         let tags: Vec<String> = row.try_get("tags").unwrap_or_default();
-        results.push(SnippetWithTags { id, snippet, url, tags });
+        results.push(models::SnippetWithTags { id, snippet, url, tags });
     }
 
     Ok(results)
 }
 
-pub async fn get_tags_with_urls_and_snippets(db_pool: &PgPool) -> Result<Vec<TagWithUrlsAndSnippets>, Error> {
+pub async fn get_tags_with_urls_and_snippets(db_pool: &PgPool) -> Result<Vec<models::TagWithUrlsAndSnippets>, Error> {
     let query = r#"
         SELECT tags.tag, 
                COALESCE(ARRAY_AGG(DISTINCT urls.url), ARRAY[]::TEXT[]) AS urls,
@@ -398,14 +423,14 @@ pub async fn get_tags_with_urls_and_snippets(db_pool: &PgPool) -> Result<Vec<Tag
         let urls: Vec<String> = row.try_get("urls").unwrap_or_default();
         let snippet_ids: Vec<i32> = row.try_get("snippet_ids").unwrap_or_default();
 
-        let snippets = sqlx::query_as::<_, SnippetWithTags>(
+        let snippets = sqlx::query_as::<_, models::SnippetWithTags>(
             "SELECT id, snippet, url, COALESCE(tags, ARRAY[]::TEXT[]) AS tags FROM snippets WHERE id = ANY($1)",
         )
         .bind(&snippet_ids)
         .fetch_all(db_pool)
         .await?;
 
-        results.push(TagWithUrlsAndSnippets { tag, urls, snippets });
+        results.push(models::TagWithUrlsAndSnippets { tag, urls, snippets });
     }
 
     Ok(results)
