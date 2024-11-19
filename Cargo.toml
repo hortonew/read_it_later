@@ -18,6 +18,7 @@ sha2 = "0.10.8"
 sqlx = { version = "0.8.2", features = [
     "runtime-tokio-native-tls",
     "postgres",
+    "sqlite",
     "chrono",
 ] }
 tera = "1.20.0"
