@@ -11,12 +11,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const snippet = urlParams.get("snippet");
     const tabUrl = urlParams.get("url");
-    const contextManager = urlParams.get("contextManager");
 
     // Determine the mode (snippet or URL)
-    if (contextManager) {
-        handleContextManager(tabUrl, snippet, statusElement, tagsInput);
-    } else if (snippet && snippet.trim() !== "") {
+    if (snippet && snippet.trim() !== "") {
         isSnippetMode = true; // Enable snippet mode
         handleSnippet(tabUrl, snippet, statusElement, tagsInput);
     } else {
@@ -24,63 +21,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         handleUrl(tab.url, statusElement, removeButton, tagsInput);
     }
 });
-
-function handleContextManager(tabUrl, snippet, statusElement, tagsInput) {
-    // Enable the tags input field
-    tagsInput.classList.add("enabled");
-
-    // Create and enable the "Send Snippet" button
-    const sendSnippetButton = document.createElement("button");
-    sendSnippetButton.textContent = "Send Snippet";
-    sendSnippetButton.classList.add("enabled", "bg-green-500", "text-white", "px-4", "py-2", "rounded", "hover:bg-green-600", "focus:outline-none", "focus:ring", "focus:ring-green-300");
-    document.body.appendChild(sendSnippetButton);
-
-    // Set up the button click handler for sending snippets
-    sendSnippetButton.addEventListener("click", async () => {
-        const tags = tagsList.join(",");
-        console.log("Sending snippet with tags:", tags); // Log the tags being sent
-
-        try {
-            chrome.runtime.sendMessage(
-                { action: "sendSnippet", url: tabUrl, snippet, tags },
-                response => {
-                    if (response.status === "success") {
-                        statusElement.textContent = "Snippet sent successfully with tags: " + tags;
-                        chrome.storage.local.remove("snippetData"); // Clear snippet data
-                        window.close(); // Close popup after successful submission
-                    } else {
-                        statusElement.textContent = `Error: ${response.error}`;
-                    }
-                }
-            );
-        } catch (error) {
-            console.error("Failed to send snippet:", error);
-            statusElement.textContent = `Error: ${error.message}`;
-        }
-    });
-
-    // Allow submitting snippet by hitting Enter
-    tagsInput.addEventListener("keydown", async function (event) {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            sendSnippetButton.click();
-        }
-    });
-
-    // Add tag on Enter or comma
-    tagsInput.addEventListener("keydown", async function (event) {
-        if (event.key === "," || event.key === "Enter") {
-            event.preventDefault();
-
-            const input = event.target.value.trim().replace(/,$/, "");
-            if (input && input !== "✖") {
-                addTag(input);
-                tagsList.push(input); // Add the tag to the list
-                event.target.value = ""; // Clear the input field
-            }
-        }
-    });
-}
 
 function handleSnippet(tabUrl, snippet, statusElement, tagsInput) {
     // Enable the tags input field
