@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    ports:
+      - "${WEB_PORT}:${WEB_PORT}"
+    volumes:
+      - app_data:/app
+
+volumes:
+  app_data:
