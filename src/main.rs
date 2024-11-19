@@ -19,10 +19,10 @@ async fn main() -> std::io::Result<()> {
     let port = env::var("WEB_PORT").unwrap_or_else(|_| "8080".to_string());
     let bind_address = format!("0.0.0.0:{}", port);
 
-    let database_type = env::var("DATABASE_TYPE").unwrap_or_else(|_| "postgres".to_string());
+    let database_type = env::var("DATABASE_TYPE").unwrap_or_else(|_| "sqlite".to_string());
     let database_url = match database_type.as_str() {
         "sqlite" => env::var("SQLITE_URL").expect("SQLITE_URL must be set for SQLite"),
-        _ => env::var("DATABASE_URL").expect("DATABASE_URL must be set for PostgreSQL"),
+        _ => env::var("POSTGRES_URL").expect("POSTGRES_URL must be set for PostgreSQL"),
     };
 
     let database: Arc<dyn models::Database> = match database_type.as_str() {

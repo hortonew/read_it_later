@@ -3,7 +3,7 @@
 An implementation of a read it later or bookmark manager style app (e.g. Pocket, Omnivore, Raindrop.io, etc.).
 
 - API: Rust and Actix Web
-- Database: Postgres
+- Databases supported: sqlite, postgres
 - Client: Chrome Extension
 
 ![images/saved_urls.png](images/saved_urls.png)
@@ -12,18 +12,33 @@ An implementation of a read it later or bookmark manager style app (e.g. Pocket,
 
 Create .env, updating with your desired users and passwords.
 
+for sqlite
+
 ```ini
+WEB_PORT=8080
+PACKAGE_NAME=read_it_later
+
+DATABASE_TYPE=sqlite
+SQLITE_URL=sqlite://read_later.db
+```
+
+for postgres
+
+```ini
+WEB_PORT=8080
+PACKAGE_NAME=read_it_later
+
+DATABASE_TYPE=postgres
 POSTGRES_USER=user
 POSTGRES_PASSWORD=password
 POSTGRES_DB=read_later
-DATABASE_URL=postgres://user:password@db:5432/read_later
-INDEX_RESPONSE="Welcome to the Read it Later app!"
-WEB_PORT=8080
-PACKAGE_NAME=read_it_later
+POSTGRES_URL=postgres://user:password@db:5432/read_later
 POSTGRES_PORT=5432
 ```
 
 ## Run
+
+Set up your docker-compose using the example [docker-compose files](docs/docker-compose/) as an example.
 
 ```sh
 docker compose up
