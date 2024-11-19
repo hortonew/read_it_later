@@ -1,7 +1,6 @@
-use crate::services::{caching, models};
+use crate::services::models;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use ammonia::Builder;
-use redis::Client as RedisClient;
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
@@ -61,17 +60,12 @@ async fn index(
 }
 
 #[get("/health")]
-async fn health(
-    database: web::Data<Arc<dyn models::Database>>,
-    redis_client: web::Data<RedisClient>,
-) -> impl Responder {
+async fn health(database: web::Data<Arc<dyn models::Database>>) -> impl Responder {
     let db_status = database.check_health().await;
-    let redis_status = caching::check_health(redis_client.get_ref()).await;
 
     let health_response = json!({
         "status": "ok",
-        "postgres": db_status,
-        "redis": redis_status
+        "database": db_status,
     });
 
     HttpResponse::Ok().json(health_response)

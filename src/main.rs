@@ -4,7 +4,7 @@ use dotenv::dotenv;
 use std::env;
 use tera::Tera;
 mod services;
-use services::{api, caching, database, models, sqlite_database};
+use services::{api, database, models, sqlite_database};
 use std::sync::Arc;
 
 #[actix_web::main]
@@ -18,7 +18,6 @@ async fn main() -> std::io::Result<()> {
     // Read configuration from environment variables
     let port = env::var("WEB_PORT").unwrap_or_else(|_| "8080".to_string());
     let bind_address = format!("0.0.0.0:{}", port);
-    let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
 
     let database_type = env::var("DATABASE_TYPE").unwrap_or_else(|_| "postgres".to_string());
     let database_url = match database_type.as_str() {
@@ -34,22 +33,19 @@ async fn main() -> std::io::Result<()> {
     // Initialize DB pool
     database.initialize().await.expect("Failed to initialize database");
 
-    // Initialize Redis client
-    let redis_client = caching::initialize_client(&redis_url).expect("Failed to initialize Redis client");
-
     // Initialize Tera template engine
     let tera = Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/**/*")).expect("Failed to initialize Tera");
 
     // Start the Actix Web server
     HttpServer::new(move || {
-        App::new()
+        let app = App::new()
             .wrap(Logger::default())
             .wrap(Cors::default().allow_any_origin().allow_any_method().allow_any_header())
             .app_data(actix_web::web::Data::new(database.clone()))
-            .app_data(actix_web::web::Data::new(redis_client.clone()))
             .app_data(actix_web::web::Data::new(tera.clone()))
-            .app_data(actix_web::web::Data::new(database_type.clone()))
-            .configure(api::configure_routes) // API routes
+            .app_data(actix_web::web::Data::new(database_type.clone()));
+
+        app.configure(api::configure_routes) // API routes
     })
     .bind(&bind_address)?
     .run()
