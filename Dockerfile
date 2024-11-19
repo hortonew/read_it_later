@@ -3,12 +3,20 @@ FROM rust:latest AS builder
 
 WORKDIR /app
 
-# Copy Rust project files
-COPY src/ ./src/
+# Step 1: Copy only the dependency files
 COPY Cargo.toml .
 COPY Cargo.lock .
 
-# Build the application in release mode
+# Step 2: Create a dummy main.rs to allow dependency installation
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs
+
+# Step 3: Pre-cache dependencies by building the dummy project
+RUN cargo build --release
+
+# Step 4: Copy the actual source code
+COPY src/ ./src/
+
+# Step 5: Rebuild the application with the real code
 RUN cargo build --release
 
 # Final stage

@@ -406,18 +406,7 @@ pub async fn get_tags_with_urls_and_snippets(
         LEFT JOIN snippet_tags ON tags.id = snippet_tags.tag_id
         LEFT JOIN snippets ON snippet_tags.snippet_id = snippets.id
         GROUP BY tags.id, tags.tag
-        UNION
-        SELECT 
-            snippet_tags.tag AS tag,
-            NULL AS urls,
-            GROUP_CONCAT(DISTINCT snippets.id) AS snippet_ids
-        FROM snippets,
-        json_each(snippets.tags) AS snippet_tags
-        WHERE snippet_tags.tag NOT IN (
-            SELECT tag FROM tags
-        )
-        GROUP BY snippet_tags.tag
-        ORDER BY tag
+        ORDER BY tags.tag
     "#;
 
     let rows = sqlx::query(query).fetch_all(db_pool).await?;
@@ -660,43 +649,64 @@ mod tests {
     async fn test_get_tags_with_urls_and_snippets() {
         let db_pool = setup_test_db().await;
 
-        let url = "https://example.com";
-        let snippet = "Test snippet content.";
-        let tags = vec!["tag1", "tag2"];
+        // Insert multiple URLs with overlapping and unique tags
+        let url1 = "https://example1.com";
+        let url2 = "https://example2.com";
+        let snippet1 = "Test snippet content 1.";
+        let snippet2 = "Test snippet content 2.";
+        let snippet3 = "Test snippet content 3.";
 
-        // Insert data
-        println!("Inserting snippet...");
-        insert_snippet(&db_pool, url, snippet, &tags).await.unwrap();
+        let tags_url1 = vec!["tag1", "tag2"];
+        let tags_url2 = vec!["tag2", "tag3"];
+        let tags_snippet1 = vec!["tag1", "tag4"];
+        let tags_snippet2 = vec!["tag2", "tag3"];
+        let tags_snippet3 = vec!["tag4"];
 
-        // Fetch all data to validate setup
-        println!("Fetching all snippets...");
-        let snippets = get_snippets_with_tags(&db_pool).await.unwrap();
-        println!("Snippets: {:?}", snippets);
+        // Insert URLs and tags
+        insert_tags(&db_pool, url1, &tags_url1).await.unwrap();
+        insert_tags(&db_pool, url2, &tags_url2).await.unwrap();
 
-        println!("Fetching all tags...");
-        let tags_in_db = sqlx::query_scalar::<_, String>("SELECT tag FROM tags")
-            .fetch_all(&db_pool)
-            .await
-            .unwrap();
-        println!("Tags: {:?}", tags_in_db);
+        // Insert snippets and their tags
+        insert_snippet(&db_pool, url1, snippet1, &tags_snippet1).await.unwrap();
+        insert_snippet(&db_pool, url1, snippet2, &tags_snippet2).await.unwrap();
+        insert_snippet(&db_pool, url2, snippet3, &tags_snippet3).await.unwrap();
 
-        println!("Fetching tags with URLs and snippets...");
+        // Fetch all tags with associated URLs and snippets
         let tags_with_urls_and_snippets = get_tags_with_urls_and_snippets(&db_pool).await.unwrap();
 
         // Assertions
+        println!("Tags with URLs and snippets: {:?}", tags_with_urls_and_snippets);
+
+        // Check the number of unique tags
         assert_eq!(
             tags_with_urls_and_snippets.len(),
-            2,
-            "Expected 2 tags, got {}",
+            4,
+            "Expected 4 unique tags, got {}",
             tags_with_urls_and_snippets.len()
         );
-        assert!(
-            tags_with_urls_and_snippets.iter().any(|t| t.tag == "tag1"),
-            "Tag 'tag1' not found"
-        );
-        assert!(
-            tags_with_urls_and_snippets.iter().any(|t| t.tag == "tag2"),
-            "Tag 'tag2' not found"
-        );
+
+        // Verify each tag contains the correct data
+        for tag in tags_with_urls_and_snippets {
+            match tag.tag.as_str() {
+                "tag1" => {
+                    assert!(tag.urls.contains(&url1.to_string()));
+                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet1));
+                }
+                "tag2" => {
+                    assert!(tag.urls.contains(&url1.to_string()));
+                    assert!(tag.urls.contains(&url2.to_string()));
+                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet2));
+                }
+                "tag3" => {
+                    assert!(tag.urls.contains(&url2.to_string()));
+                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet2));
+                }
+                "tag4" => {
+                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet1));
+                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet3));
+                }
+                _ => panic!("Unexpected tag: {}", tag.tag),
+            }
+        }
     }
 }
