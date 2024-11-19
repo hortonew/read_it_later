@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>{{ title }}</title>
-    <meta http-equiv="refresh" content="3">
+    <!-- <meta http-equiv="refresh" content="3"> -->
     <meta charset="UTF-8">
-    {% include 'css.html' %} 
+    {% include 'css.html' %}
     <script>
         async function submitDeleteSnippet(event, snippetId) {
             event.preventDefault();
@@ -26,34 +27,38 @@
         }
     </script>
 </head>
+
 <body class="bg-gray-100 text-gray-900 dark-mode">
     {% include 'nav.html' %}
     <div class="container mx-auto p-4">
         <h1 class="text-3xl font-bold mb-4">{{ title }}</h1>
         <ol class="list-decimal pl-5">
             {% for snippet_with_tags in snippets_with_tags %}
-                <li class="mb-2 list-none">
-                    <div class="bg-white p-4 rounded shadow flex items-center justify-between">
-                        <div>
-                            <div>{{ snippet_with_tags.snippet }}</div>
-                            <div>URL: <a href="{{ snippet_with_tags.url }}" target="_blank" class="text-blue-500 hover:underline">{{ snippet_with_tags.url }}</a></div>
-                            <div>
-                                {% if snippet_with_tags.tags | length > 0 %}
-                                    <div class="flex flex-wrap gap-0.5 mt-0.5">
-                                    {% for tag in snippet_with_tags.tags %}
-                                    <span class="text-xs px-1 py-0.5 border border-gray-300 bg-gray-100 rounded text-gray-700">
-                                        {{ tag }}
-                                    </span>
-                                    {% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
+            <li class="mb-2 list-none">
+                <div class="bg-white p-4 rounded shadow flex items-center justify-between">
+                    <div>
+                        <div>{{ snippet_with_tags.snippet }}</div>
+                        <div>URL: <a href="{{ snippet_with_tags.url }}" target="_blank"
+                                class="text-blue-500 hover:underline">{{ snippet_with_tags.url }}</a></div>
+                        {% if snippet_with_tags.tags | length > 0 %}
+                        <div class="flex flex-wrap gap-0.5 mt-0.5">
+                            {% for tag in snippet_with_tags.tags %}
+                            {% if tag %}
+                            <span class="text-xs px-1 py-0.5 border border-gray-300 bg-gray-100 rounded text-gray-700">
+                                {{ tag }}
+                            </span>
+                            {% endif %}
+                            {% endfor %}
                         </div>
-                        <button onclick="submitDeleteSnippet(event, {{ snippet_with_tags.id }})" class="text-red-500 hover:text-red-700">X</button>
+                        {% endif %}
                     </div>
-                </li>
+                    <button onclick="submitDeleteSnippet(event, {{ snippet_with_tags.id }})"
+                        class="text-red-500 hover:text-red-700">X</button>
+                </div>
+            </li>
             {% endfor %}
         </ol>
     </div>
 </body>
+
 </html>
