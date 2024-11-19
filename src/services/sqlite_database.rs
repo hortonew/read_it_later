@@ -202,24 +202,100 @@ pub async fn insert_url(db_pool: &SqlitePool, url: &str) -> Result<i32, Error> {
     Ok(url_id)
 }
 
+/// Helper: Insert or fetch a tag ID
+async fn get_or_create_tag(db_pool: &SqlitePool, tag: &str) -> Result<i32, Error> {
+    match sqlx::query_scalar::<_, i32>(
+        r#"
+        INSERT INTO tags (tag)
+        VALUES (?)
+        ON CONFLICT(tag) DO NOTHING
+        RETURNING id
+        "#,
+    )
+    .bind(tag)
+    .fetch_optional(db_pool)
+    .await?
+    {
+        Some(id) => Ok(id),
+        None => {
+            // If the tag exists, fetch its ID
+            sqlx::query_scalar("SELECT id FROM tags WHERE tag = ?")
+                .bind(tag)
+                .fetch_one(db_pool)
+                .await
+        }
+    }
+}
+
+/// Helper: Link a tag to a snippet or URL
+async fn link_to_tag(
+    db_pool: &SqlitePool,
+    tag_id: i32,
+    target_id: i32,
+    table: &str,
+    column: &str,
+) -> Result<(), Error> {
+    let query = format!(
+        r#"
+        INSERT INTO {table} ({column}, tag_id)
+        VALUES (?, ?)
+        ON CONFLICT({column}, tag_id) DO NOTHING
+        "#,
+        table = table,
+        column = column
+    );
+
+    sqlx::query(&query)
+        .bind(target_id)
+        .bind(tag_id)
+        .execute(db_pool)
+        .await?;
+    Ok(())
+}
+
 /// Insert a snippet into the database
 pub async fn insert_snippet(db_pool: &SqlitePool, url: &str, snippet: &str, tags: &[&str]) -> Result<i32, Error> {
     let tags_json = serde_json::to_string(tags).unwrap_or("[]".to_string());
 
-    let query = r#"
+    // Insert the snippet
+    let snippet_id: i32 = sqlx::query_scalar(
+        r#"
         INSERT INTO snippets (url, snippet, tags)
         VALUES (?, ?, ?)
         RETURNING id
-    "#;
+        "#,
+    )
+    .bind(url)
+    .bind(snippet)
+    .bind(tags_json)
+    .fetch_one(db_pool)
+    .await?;
 
-    let snippet_id: i32 = sqlx::query_scalar(query)
-        .bind(url)
-        .bind(snippet)
-        .bind(tags_json)
-        .fetch_one(db_pool)
-        .await?;
+    // Link tags to the snippet
+    for tag in tags {
+        let tag_id = get_or_create_tag(db_pool, tag).await?;
+        link_to_tag(db_pool, tag_id, snippet_id, "snippet_tags", "snippet_id").await?;
+    }
 
     Ok(snippet_id)
+}
+
+/// Insert tags for a URL
+pub async fn insert_tags(db_pool: &SqlitePool, url: &str, tags: &[&str]) -> Result<(), Error> {
+    if tags.is_empty() {
+        return Ok(()); // Nothing to insert
+    }
+
+    // Insert or retrieve the URL ID
+    let url_id = insert_url(db_pool, url).await?;
+
+    // Link tags to the URL
+    for tag in tags {
+        let tag_id = get_or_create_tag(db_pool, tag).await?;
+        link_to_tag(db_pool, tag_id, url_id, "url_tags", "url_id").await?;
+    }
+
+    Ok(())
 }
 
 /// Fetch all snippets with their associated tags
@@ -322,15 +398,26 @@ pub async fn get_tags_with_urls_and_snippets(
     let query = r#"
         SELECT 
             tags.tag, 
-            COALESCE(GROUP_CONCAT(DISTINCT urls.url), '') AS urls,
-            COALESCE(GROUP_CONCAT(DISTINCT snippets.id), '') AS snippet_ids
+            GROUP_CONCAT(DISTINCT urls.url) AS urls,
+            GROUP_CONCAT(DISTINCT snippets.id) AS snippet_ids
         FROM tags
         LEFT JOIN url_tags ON tags.id = url_tags.tag_id
         LEFT JOIN urls ON url_tags.url_id = urls.id
         LEFT JOIN snippet_tags ON tags.id = snippet_tags.tag_id
         LEFT JOIN snippets ON snippet_tags.snippet_id = snippets.id
-        GROUP BY tags.tag
-        ORDER BY tags.tag
+        GROUP BY tags.id, tags.tag
+        UNION
+        SELECT 
+            snippet_tags.tag AS tag,
+            NULL AS urls,
+            GROUP_CONCAT(DISTINCT snippets.id) AS snippet_ids
+        FROM snippets,
+        json_each(snippets.tags) AS snippet_tags
+        WHERE snippet_tags.tag NOT IN (
+            SELECT tag FROM tags
+        )
+        GROUP BY snippet_tags.tag
+        ORDER BY tag
     "#;
 
     let rows = sqlx::query(query).fetch_all(db_pool).await?;
@@ -402,60 +489,13 @@ pub async fn get_tags_with_urls_and_snippets(
     Ok(results)
 }
 
-pub async fn insert_tags(db_pool: &SqlitePool, url: &str, tags: &[&str]) -> Result<(), Error> {
-    if tags.is_empty() {
-        return Ok(()); // Nothing to insert
-    }
-
-    // Insert or retrieve the URL ID
-    let url_id = insert_url(db_pool, url).await?;
-
-    for tag in tags {
-        // Check if the tag already exists or insert it
-        let tag_query = r#"
-            INSERT INTO tags (tag)
-            VALUES (?)
-            ON CONFLICT(tag) DO NOTHING
-            RETURNING id
-        "#;
-
-        // If the tag already exists, fetch its ID
-        let tag_id: i32 = match sqlx::query_scalar(tag_query).bind(tag).fetch_one(db_pool).await {
-            Ok(id) => id,
-            Err(sqlx::Error::RowNotFound) => {
-                // If the tag exists but isn't returned, fetch its ID directly
-                sqlx::query_scalar("SELECT id FROM tags WHERE tag = ?")
-                    .bind(tag)
-                    .fetch_one(db_pool)
-                    .await?
-            }
-            Err(err) => return Err(err),
-        };
-
-        // Link the URL and tag in the `url_tags` table
-        let url_tag_query = r#"
-            INSERT INTO url_tags (url_id, tag_id)
-            VALUES (?, ?)
-            ON CONFLICT(url_id, tag_id) DO NOTHING
-        "#;
-
-        sqlx::query(url_tag_query)
-            .bind(url_id)
-            .bind(tag_id)
-            .execute(db_pool)
-            .await?;
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
 
     async fn setup_test_db() -> SqlitePool {
-        let pool = SqlitePool::connect(":memory").await.unwrap();
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
         initialize_tables(&pool).await.unwrap();
         pool
     }
@@ -528,5 +568,135 @@ mod tests {
         let db_pool = setup_test_db().await;
         let health = check_health(&db_pool).await;
         assert_eq!(health, "ok");
+    }
+    #[tokio::test]
+    async fn test_get_all_urls() {
+        let db_pool = setup_test_db().await;
+
+        let url1 = "https://example1.com";
+        let url2 = "https://example2.com";
+
+        insert_url(&db_pool, url1).await.unwrap();
+        insert_url(&db_pool, url2).await.unwrap();
+
+        let urls = get_all_urls(&db_pool).await.unwrap();
+        assert_eq!(urls.len(), 2);
+        assert!(urls.iter().any(|u| u.url == url1));
+        assert!(urls.iter().any(|u| u.url == url2));
+    }
+
+    #[tokio::test]
+    async fn test_get_urls_with_tags() {
+        let db_pool = setup_test_db().await;
+
+        let url = "https://example.com";
+        let tags = vec!["tag1", "tag2"];
+        insert_tags(&db_pool, url, &tags).await.unwrap();
+
+        let urls_with_tags = get_urls_with_tags(&db_pool).await.unwrap();
+        assert_eq!(urls_with_tags.len(), 1);
+        let retrieved = &urls_with_tags[0];
+        assert_eq!(retrieved.url, url);
+        assert_eq!(retrieved.tags, tags);
+    }
+
+    #[tokio::test]
+    async fn test_delete_url_by_url() {
+        let db_pool = setup_test_db().await;
+
+        let url = "https://example.com";
+        insert_url(&db_pool, url).await.unwrap();
+        delete_url_by_url(&db_pool, url).await.unwrap();
+
+        let urls = get_all_urls(&db_pool).await.unwrap();
+        assert!(urls.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_insert_tags() {
+        let db_pool = setup_test_db().await;
+
+        let url = "https://example.com";
+        let tags = vec!["tag1", "tag2"];
+        insert_tags(&db_pool, url, &tags).await.unwrap();
+
+        let urls_with_tags = get_urls_with_tags(&db_pool).await.unwrap();
+        assert_eq!(urls_with_tags.len(), 1);
+        assert_eq!(urls_with_tags[0].tags, tags);
+    }
+
+    #[tokio::test]
+    async fn test_remove_unused_tags() {
+        let db_pool = setup_test_db().await;
+
+        let url = "https://example.com";
+        let tags = vec!["tag1", "tag2"];
+        insert_tags(&db_pool, url, &tags).await.unwrap();
+        delete_url_by_url(&db_pool, url).await.unwrap();
+        remove_unused_tags(&db_pool).await.unwrap();
+
+        let remaining_tags: Vec<String> = sqlx::query_scalar("SELECT tag FROM tags")
+            .fetch_all(&db_pool)
+            .await
+            .unwrap();
+        assert!(remaining_tags.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_snippet() {
+        let db_pool = setup_test_db().await;
+
+        let url = "https://example.com";
+        let snippet = "This is a test snippet.";
+        let tags = vec!["tag1", "tag2"];
+        let snippet_id = insert_snippet(&db_pool, url, snippet, &tags).await.unwrap();
+
+        delete_snippet(&db_pool, snippet_id).await.unwrap();
+        let snippets = get_snippets_with_tags(&db_pool).await.unwrap();
+        assert!(snippets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_tags_with_urls_and_snippets() {
+        let db_pool = setup_test_db().await;
+
+        let url = "https://example.com";
+        let snippet = "Test snippet content.";
+        let tags = vec!["tag1", "tag2"];
+
+        // Insert data
+        println!("Inserting snippet...");
+        insert_snippet(&db_pool, url, snippet, &tags).await.unwrap();
+
+        // Fetch all data to validate setup
+        println!("Fetching all snippets...");
+        let snippets = get_snippets_with_tags(&db_pool).await.unwrap();
+        println!("Snippets: {:?}", snippets);
+
+        println!("Fetching all tags...");
+        let tags_in_db = sqlx::query_scalar::<_, String>("SELECT tag FROM tags")
+            .fetch_all(&db_pool)
+            .await
+            .unwrap();
+        println!("Tags: {:?}", tags_in_db);
+
+        println!("Fetching tags with URLs and snippets...");
+        let tags_with_urls_and_snippets = get_tags_with_urls_and_snippets(&db_pool).await.unwrap();
+
+        // Assertions
+        assert_eq!(
+            tags_with_urls_and_snippets.len(),
+            2,
+            "Expected 2 tags, got {}",
+            tags_with_urls_and_snippets.len()
+        );
+        assert!(
+            tags_with_urls_and_snippets.iter().any(|t| t.tag == "tag1"),
+            "Tag 'tag1' not found"
+        );
+        assert!(
+            tags_with_urls_and_snippets.iter().any(|t| t.tag == "tag2"),
+            "Tag 'tag2' not found"
+        );
     }
 }
