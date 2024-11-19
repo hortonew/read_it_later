@@ -4,7 +4,7 @@ use dotenv::dotenv;
 use std::env;
 use tera::Tera;
 mod services;
-use services::{api, database, models, sqlite_database};
+use services::{api, models, postgres_database, sqlite_database};
 use std::sync::Arc;
 
 #[actix_web::main]
@@ -27,7 +27,7 @@ async fn main() -> std::io::Result<()> {
 
     let database: Arc<dyn models::Database> = match database_type.as_str() {
         "sqlite" => Arc::new(sqlite_database::SqliteDatabase::new(&database_url).await.unwrap()),
-        _ => Arc::new(database::PostgresDatabase::new(&database_url).await.unwrap()),
+        _ => Arc::new(postgres_database::PostgresDatabase::new(&database_url).await.unwrap()),
     };
 
     // Initialize DB pool
