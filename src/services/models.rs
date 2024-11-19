@@ -44,7 +44,7 @@ pub struct SnippetWithTags {
     pub tags: Vec<String>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct TagWithUrlsAndSnippets {
     pub tag: String,
     pub urls: Vec<String>,

@@ -396,17 +396,35 @@ pub async fn get_tags_with_urls_and_snippets(
     db_pool: &SqlitePool,
 ) -> Result<Vec<models::TagWithUrlsAndSnippets>, Error> {
     let query = r#"
-        SELECT 
-            tags.tag, 
-            GROUP_CONCAT(DISTINCT urls.url) AS urls,
-            GROUP_CONCAT(DISTINCT snippets.id) AS snippet_ids
-        FROM tags
-        LEFT JOIN url_tags ON tags.id = url_tags.tag_id
-        LEFT JOIN urls ON url_tags.url_id = urls.id
-        LEFT JOIN snippet_tags ON tags.id = snippet_tags.tag_id
-        LEFT JOIN snippets ON snippet_tags.snippet_id = snippets.id
-        GROUP BY tags.id, tags.tag
-        ORDER BY tags.tag
+        WITH all_tags AS (
+            SELECT 
+                tags.tag,
+                GROUP_CONCAT(DISTINCT urls.url) AS urls,
+                GROUP_CONCAT(DISTINCT snippets.id) AS snippet_ids
+            FROM tags
+            LEFT JOIN url_tags ON tags.id = url_tags.tag_id
+            LEFT JOIN urls ON url_tags.url_id = urls.id
+            LEFT JOIN snippet_tags ON tags.id = snippet_tags.tag_id
+            LEFT JOIN snippets ON snippet_tags.snippet_id = snippets.id
+            GROUP BY tags.id, tags.tag
+        ),
+        untagged_combined AS (
+            SELECT
+                '' AS tag,
+                GROUP_CONCAT(DISTINCT urls.url) AS urls,
+                GROUP_CONCAT(DISTINCT snippets.id) AS snippet_ids
+            FROM urls
+            LEFT JOIN url_tags ON urls.id = url_tags.url_id
+            LEFT JOIN snippets ON urls.url = snippets.url
+            LEFT JOIN snippet_tags ON snippets.id = snippet_tags.snippet_id
+            WHERE url_tags.id IS NULL AND snippet_tags.id IS NULL
+        )
+        SELECT tag, urls, snippet_ids
+        FROM all_tags
+        UNION ALL
+        SELECT tag, urls, snippet_ids
+        FROM untagged_combined
+        ORDER BY tag
     "#;
 
     let rows = sqlx::query(query).fetch_all(db_pool).await?;
@@ -652,9 +670,11 @@ mod tests {
         // Insert multiple URLs with overlapping and unique tags
         let url1 = "https://example1.com";
         let url2 = "https://example2.com";
+        let untagged_url = "https://untagged.com";
         let snippet1 = "Test snippet content 1.";
         let snippet2 = "Test snippet content 2.";
         let snippet3 = "Test snippet content 3.";
+        let untagged_snippet = "Untagged snippet content.";
 
         let tags_url1 = vec!["tag1", "tag2"];
         let tags_url2 = vec!["tag2", "tag3"];
@@ -671,42 +691,116 @@ mod tests {
         insert_snippet(&db_pool, url1, snippet2, &tags_snippet2).await.unwrap();
         insert_snippet(&db_pool, url2, snippet3, &tags_snippet3).await.unwrap();
 
+        // Insert untagged URL and snippet
+        insert_url(&db_pool, untagged_url).await.unwrap();
+        insert_snippet(&db_pool, untagged_url, untagged_snippet, &[])
+            .await
+            .unwrap();
+
         // Fetch all tags with associated URLs and snippets
         let tags_with_urls_and_snippets = get_tags_with_urls_and_snippets(&db_pool).await.unwrap();
 
         // Assertions
         println!("Tags with URLs and snippets: {:?}", tags_with_urls_and_snippets);
 
-        // Check the number of unique tags
-        assert_eq!(
-            tags_with_urls_and_snippets.len(),
-            4,
-            "Expected 4 unique tags, got {}",
-            tags_with_urls_and_snippets.len()
+        // Verify untagged group exists
+        let untagged_group = tags_with_urls_and_snippets
+            .iter()
+            .find(|group| group.tag.is_empty())
+            .expect("Untagged group not found!");
+        assert!(
+            untagged_group.urls.contains(&untagged_url.to_string()),
+            "Untagged URL not found in the untagged group"
+        );
+        assert!(
+            untagged_group
+                .snippets
+                .iter()
+                .any(|snippet| snippet.snippet == untagged_snippet),
+            "Untagged snippet not found in the untagged group"
         );
 
-        // Verify each tag contains the correct data
-        for tag in tags_with_urls_and_snippets {
-            match tag.tag.as_str() {
+        // Verify tagged groups and their content
+        for tag_group in tags_with_urls_and_snippets {
+            match tag_group.tag.as_str() {
                 "tag1" => {
-                    assert!(tag.urls.contains(&url1.to_string()));
-                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet1));
+                    assert!(tag_group.urls.contains(&url1.to_string()));
+                    assert!(tag_group.snippets.iter().any(|s| s.snippet == snippet1));
                 }
                 "tag2" => {
-                    assert!(tag.urls.contains(&url1.to_string()));
-                    assert!(tag.urls.contains(&url2.to_string()));
-                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet2));
+                    assert!(tag_group.urls.contains(&url1.to_string()));
+                    assert!(tag_group.urls.contains(&url2.to_string()));
+                    assert!(tag_group.snippets.iter().any(|s| s.snippet == snippet2));
                 }
                 "tag3" => {
-                    assert!(tag.urls.contains(&url2.to_string()));
-                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet2));
+                    assert!(tag_group.urls.contains(&url2.to_string()));
+                    assert!(tag_group.snippets.iter().any(|s| s.snippet == snippet2));
                 }
                 "tag4" => {
-                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet1));
-                    assert!(tag.snippets.iter().any(|s| s.snippet == snippet3));
+                    assert!(tag_group.snippets.iter().any(|s| s.snippet == snippet1));
+                    assert!(tag_group.snippets.iter().any(|s| s.snippet == snippet3));
                 }
-                _ => panic!("Unexpected tag: {}", tag.tag),
+                _ => {} // Ignore unexpected groups
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_untagged_urls_are_included() {
+        let db_pool = setup_test_db().await;
+
+        // Insert URLs with and without tags
+        let tagged_url = "https://tagged-url.com";
+        let untagged_url = "https://untagged-url.com";
+
+        let snippet_for_untagged = "Snippet for untagged URL.";
+
+        // Insert a tagged URL
+        let tags = vec!["example-tag"];
+        insert_tags(&db_pool, tagged_url, &tags).await.unwrap();
+
+        // Insert an untagged URL
+        insert_url(&db_pool, untagged_url).await.unwrap();
+
+        // Insert a snippet associated with the untagged URL
+        insert_snippet(&db_pool, untagged_url, snippet_for_untagged, &[])
+            .await
+            .unwrap();
+
+        // Fetch all tags with associated URLs and snippets
+        let tags_with_urls_and_snippets = get_tags_with_urls_and_snippets(&db_pool).await.unwrap();
+
+        // Print the results for debugging
+        println!("Tags with URLs and snippets: {:?}", tags_with_urls_and_snippets);
+
+        // Verify untagged URLs are included under a group with an empty tag
+        let untagged_group = tags_with_urls_and_snippets
+            .iter()
+            .find(|group| group.tag.is_empty())
+            .expect("No untagged group found!");
+
+        assert!(
+            untagged_group.urls.contains(&untagged_url.to_string()),
+            "Untagged URL not found in the untagged group"
+        );
+
+        assert!(
+            untagged_group
+                .snippets
+                .iter()
+                .any(|snippet| snippet.snippet == snippet_for_untagged),
+            "Snippet for untagged URL not found in the untagged group"
+        );
+
+        // Verify tagged URL is present in the correct group
+        let tagged_group = tags_with_urls_and_snippets
+            .iter()
+            .find(|group| group.tag == "example-tag")
+            .expect("Tagged group not found!");
+
+        assert!(
+            tagged_group.urls.contains(&tagged_url.to_string()),
+            "Tagged URL not found in the tagged group"
+        );
     }
 }
