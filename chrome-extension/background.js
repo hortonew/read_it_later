@@ -104,9 +104,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
         const highlightedText = info.selectionText; // Get selected text
         const tabUrl = tab.url;
 
-        // Open the popup for adding tags
+        // Open the context manager popup for adding tags
         chrome.windows.create({
-            url: `popup.html?url=${encodeURIComponent(tabUrl)}&snippet=${encodeURIComponent(highlightedText)}`,
+            url: `context-manager-popup.html?url=${encodeURIComponent(tabUrl)}&snippet=${encodeURIComponent(highlightedText)}&contextManager=true`,
             type: "popup",
             width: 400,
             height: 300

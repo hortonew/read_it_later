@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Read it Later",
-    "version": "0.4",
+    "version": "0.5",
     "description": "Send URL and tags to Read it Later.",
     "permissions": [
         "activeTab",
@@ -18,5 +18,15 @@
             "48": "icon48.png",
             "128": "icon128.png"
         }
-    }
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "context-manager-popup.html"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
 }
