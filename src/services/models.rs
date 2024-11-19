@@ -36,7 +36,7 @@ pub struct DeleteSnippet {
     pub id: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct SnippetWithTags {
     pub id: i32,
     pub snippet: String,

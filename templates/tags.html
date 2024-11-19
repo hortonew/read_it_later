@@ -180,20 +180,18 @@
                         <div class="bg-white p-4 rounded shadow flex items-center justify-between">
                             <div>
                                 <div>{{ snippet.snippet }}</div>
-                                <div>URL: <a href="{{ snippet.url }}" target="_blank"
-                                        class="text-blue-500 hover:underline">{{ snippet.url }}</a></div>
-                                <div>
-                                    {% if snippet.tags | length > 0 %}
-                                    <div class="flex flex-wrap gap-0.5 mt-0.5">
-                                        {% for tag in snippet.tags %}
-                                        <span
-                                            class="text-xs px-1 py-0.5 border border-gray-300 bg-gray-100 rounded text-gray-700">
-                                            {{ tag }}
-                                        </span>
-                                        {% endfor %}
-                                    </div>
+                                <div>URL: <a href="{{ snippet.url }}" target="_blank" class="text-blue-500 hover:underline">{{ snippet.url }}</a></div>
+                                {% if snippet.tags | length > 0 %}
+                                <div class="flex flex-wrap gap-0.5 mt-0.5">
+                                    {% for tag in snippet.tags %}
+                                    {% if tag %}
+                                    <span class="text-xs px-1 py-0.5 border border-gray-300 bg-gray-100 rounded text-gray-700">
+                                        {{ tag }}
+                                    </span>
                                     {% endif %}
+                                    {% endfor %}
                                 </div>
+                                {% endif %}
                             </div>
                             <button onclick="submitDeleteSnippet(event, {{ snippet.id }})"
                                 class="text-red-500 hover:text-red-700">X</button>
