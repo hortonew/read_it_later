@@ -15,7 +15,11 @@ fn sanitize_with_allowed_tags(input: &str) -> ammonia::Document {
 }
 
 #[get("/")]
-async fn index(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Data<Tera>) -> impl Responder {
+async fn index(
+    database: web::Data<Arc<dyn models::Database>>,
+    tmpl: web::Data<Tera>,
+    database_type: web::Data<String>,
+) -> impl Responder {
     let result = database.get_urls_with_tags().await;
 
     match result {
@@ -38,6 +42,7 @@ async fn index(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Data<T
             let mut context = Context::new();
             context.insert("urls_with_tags", &enriched_urls_with_tags);
             context.insert("title", "Read it Later");
+            context.insert("database_type", &**database_type);
 
             // Render the template
             match tmpl.render("index.html", &context) {
@@ -160,7 +165,11 @@ async fn list_urls_with_tags(database: web::Data<Arc<dyn models::Database>>) -> 
 }
 
 #[get("/tags")]
-async fn tags_page(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Data<Tera>) -> impl Responder {
+async fn tags_page(
+    database: web::Data<Arc<dyn models::Database>>,
+    tmpl: web::Data<Tera>,
+    database_type: web::Data<String>,
+) -> impl Responder {
     let result = database.get_tags_with_urls_and_snippets().await;
 
     match result {
@@ -168,6 +177,7 @@ async fn tags_page(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Da
             let mut context = Context::new();
             context.insert("tags_with_urls_and_snippets", &tags_with_urls_and_snippets);
             context.insert("title", "Tags");
+            context.insert("database_type", &**database_type);
 
             match tmpl.render("tags.html", &context) {
                 Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
@@ -185,7 +195,11 @@ async fn tags_page(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Da
 }
 
 #[get("/snippets")]
-async fn snippets_page(database: web::Data<Arc<dyn models::Database>>, tmpl: web::Data<Tera>) -> impl Responder {
+async fn snippets_page(
+    database: web::Data<Arc<dyn models::Database>>,
+    tmpl: web::Data<Tera>,
+    database_type: web::Data<String>,
+) -> impl Responder {
     let result = database.get_snippets_with_tags().await;
 
     match result {
@@ -208,6 +222,7 @@ async fn snippets_page(database: web::Data<Arc<dyn models::Database>>, tmpl: web
             let mut context = Context::new();
             context.insert("snippets_with_tags", &sanitized_snippets);
             context.insert("title", "Snippets");
+            context.insert("database_type", &**database_type);
 
             match tmpl.render("snippets.html", &context) {
                 Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),

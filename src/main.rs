@@ -48,6 +48,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(actix_web::web::Data::new(database.clone()))
             .app_data(actix_web::web::Data::new(redis_client.clone()))
             .app_data(actix_web::web::Data::new(tera.clone()))
+            .app_data(actix_web::web::Data::new(database_type.clone()))
             .configure(api::configure_routes) // API routes
     })
     .bind(&bind_address)?
