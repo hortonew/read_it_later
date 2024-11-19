@@ -392,26 +392,34 @@ pub async fn get_snippets_with_tags(db_pool: &PgPool) -> Result<Vec<models::Snip
 
 pub async fn get_tags_with_urls_and_snippets(db_pool: &PgPool) -> Result<Vec<models::TagWithUrlsAndSnippets>, Error> {
     let query = r#"
-        SELECT tags.tag, 
-               COALESCE(ARRAY_AGG(DISTINCT urls.url), ARRAY[]::TEXT[]) AS urls,
-               COALESCE(ARRAY_AGG(DISTINCT snippets.id), ARRAY[]::INTEGER[]) AS snippet_ids
-        FROM tags
-        LEFT JOIN url_tags ON tags.id = url_tags.tag_id
-        LEFT JOIN urls ON url_tags.url_id = urls.id
-        LEFT JOIN snippet_tags ON tags.id = snippet_tags.tag_id
-        LEFT JOIN snippets ON snippet_tags.snippet_id = snippets.id
-        GROUP BY tags.tag
-        UNION
-        SELECT unnest(snippets.tags) AS tag,
-               ARRAY[]::TEXT[] AS urls,
-               ARRAY_AGG(snippets.id) AS snippet_ids
-        FROM snippets
-        WHERE NOT EXISTS (
-            SELECT 1
+        WITH all_tags AS (
+            SELECT 
+                tags.tag,
+                COALESCE(ARRAY_AGG(DISTINCT urls.url), ARRAY[]::TEXT[]) AS urls,
+                COALESCE(ARRAY_AGG(DISTINCT snippets.id), ARRAY[]::INTEGER[]) AS snippet_ids
             FROM tags
-            WHERE tags.tag = ANY(snippets.tags)
+            LEFT JOIN url_tags ON tags.id = url_tags.tag_id
+            LEFT JOIN urls ON url_tags.url_id = urls.id
+            LEFT JOIN snippet_tags ON tags.id = snippet_tags.tag_id
+            LEFT JOIN snippets ON snippet_tags.snippet_id = snippets.id
+            GROUP BY tags.tag
+        ),
+        untagged_combined AS (
+            SELECT
+                '' AS tag,
+                COALESCE(ARRAY_AGG(DISTINCT urls.url), ARRAY[]::TEXT[]) AS urls,
+                COALESCE(ARRAY_AGG(DISTINCT snippets.id), ARRAY[]::INTEGER[]) AS snippet_ids
+            FROM urls
+            LEFT JOIN url_tags ON urls.id = url_tags.url_id
+            LEFT JOIN snippets ON urls.url = snippets.url
+            LEFT JOIN snippet_tags ON snippets.id = snippet_tags.snippet_id
+            WHERE url_tags.id IS NULL AND snippet_tags.id IS NULL
         )
-        GROUP BY tag
+        SELECT tag, urls, snippet_ids
+        FROM all_tags
+        UNION ALL
+        SELECT tag, urls, snippet_ids
+        FROM untagged_combined
         ORDER BY tag
     "#;
 
