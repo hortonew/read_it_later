@@ -1,2 +1,3 @@
 target/
 /.env
+read_later.db

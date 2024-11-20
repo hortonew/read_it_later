@@ -240,9 +240,6 @@ async fn insert_snippet(
 ) -> impl Responder {
     let tags: Vec<&str> = req.tags.split(',').map(|tag| tag.trim()).collect();
 
-    // Log the received tags for debugging
-    println!("Received tags for snippet: {:?}", tags);
-
     match database.insert_snippet(&req.url, &req.snippet, &tags).await {
         Ok(_) => HttpResponse::Ok().json("Snippet inserted successfully"),
         Err(err) => {
