@@ -3,7 +3,7 @@ FROM rust:latest AS builder
 
 WORKDIR /app
 
-# Step 1: Copy only the dependency files
+# Step 1: Copy dependency files to pre-cache dependencies
 COPY Cargo.toml .
 COPY Cargo.lock .
 
@@ -20,17 +20,23 @@ COPY src/ ./src/
 RUN cargo build --release
 
 # Final stage
-FROM rust:latest
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Copy the binary from the builder stage
+# Install required runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libssl-dev \
+    libssl3 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy only the binary and required assets from the builder stage
 COPY --from=builder /app/target/release/read_it_later /app/
 COPY templates/ /app/templates/
+COPY .env /app/.env
 
 # Ensure the binary is executable
 RUN chmod +x /app/read_it_later
-COPY .env /app/.env
 
-# Default command
+# Set the default command
 CMD ["/app/read_it_later"]

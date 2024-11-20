@@ -8,6 +8,12 @@ An implementation of a read it later or bookmark manager style app (e.g. Pocket,
 
 ![images/saved_urls.png](images/saved_urls.png)
 
+## Quick start
+
+```sh
+docker run -it --name read_it_later --rm -p 8080:8080 hortonew/read_it_later:0.0.2
+```
+
 ## Configure
 
 Create .env, updating with your desired users and passwords.

@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    println!("read_it_later has started");
+
     // Load the .env file
     dotenv().ok();
 
