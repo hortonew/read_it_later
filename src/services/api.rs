@@ -1,7 +1,6 @@
 use crate::services::models;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use ammonia::Builder;
-use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 use tera::{Context, Tera};
@@ -71,13 +70,11 @@ async fn health(database: web::Data<Arc<dyn models::Database>>) -> impl Responde
     HttpResponse::Ok().json(health_response)
 }
 
-#[derive(Deserialize)]
-pub struct NewUrl {
-    url: String,
-}
-
 #[post("/urls/url")]
-async fn insert_record(database: web::Data<Arc<dyn models::Database>>, req: web::Json<NewUrl>) -> impl Responder {
+async fn insert_record(
+    database: web::Data<Arc<dyn models::Database>>,
+    req: web::Json<models::NewUrl>,
+) -> impl Responder {
     match database.insert_url(&req.url).await {
         Ok(_) => HttpResponse::Ok().json("Record inserted successfully"),
         Err(sqlx::Error::RowNotFound) => HttpResponse::Conflict().json("Record already exists"),
@@ -101,15 +98,10 @@ async fn list_urls(database: web::Data<Arc<dyn models::Database>>) -> impl Respo
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub struct DeleteUrlByUrl {
-    url: String,
-}
-
 #[post("/urls/delete/by-url")]
 async fn delete_record_by_url(
     database: web::Data<Arc<dyn models::Database>>,
-    req: web::Json<DeleteUrlByUrl>,
+    req: web::Json<models::DeleteUrlByUrl>,
 ) -> impl Responder {
     println!("Body: {:?}", req);
 

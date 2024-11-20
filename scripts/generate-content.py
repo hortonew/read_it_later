@@ -143,5 +143,5 @@ def generate_test_data(num_items):
 
 # Run the script
 if __name__ == "__main__":
-    num_items = 15  # Number of items to generate
+    num_items = 1000  # Number of items to generate
     generate_test_data(num_items)

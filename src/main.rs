@@ -13,6 +13,7 @@ async fn main() -> std::io::Result<()> {
 
     // Load the .env file
     dotenv().ok();
+    println!("environment variables loaded");
 
     // Initialize the logger
     // env_logger::init_from_env(Env::default().default_filter_or("info"));
@@ -31,6 +32,8 @@ async fn main() -> std::io::Result<()> {
         "sqlite" => Arc::new(sqlite_database::SqliteDatabase::new(&database_url).await.unwrap()),
         _ => Arc::new(postgres_database::PostgresDatabase::new(&database_url).await.unwrap()),
     };
+
+    println!("Database: {}, {}", database_type, database_url);
 
     // Initialize DB pool
     database.initialize().await.expect("Failed to initialize database");

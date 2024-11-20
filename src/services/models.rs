@@ -25,6 +25,11 @@ pub struct UrlWithTags {
 }
 
 #[derive(Deserialize)]
+pub struct NewUrl {
+    pub url: String,
+}
+
+#[derive(Deserialize)]
 pub struct NewSnippet {
     pub url: String,
     pub snippet: String,
@@ -34,6 +39,11 @@ pub struct NewSnippet {
 #[derive(Deserialize, Debug)]
 pub struct DeleteSnippet {
     pub id: i32,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DeleteUrlByUrl {
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
