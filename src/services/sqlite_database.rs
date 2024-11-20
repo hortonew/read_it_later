@@ -12,23 +12,26 @@ impl SqliteDatabase {
     pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
         if database_url.starts_with("sqlite://") {
             let path = database_url.strip_prefix("sqlite://").unwrap_or(database_url);
-
-            // Ensure the parent directory exists
-            if let Some(parent) = Path::new(path).parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent).map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
-                }
-            }
-
-            // Create the SQLite file if it doesn't exist
-            if !Path::new(path).exists() {
-                fs::File::create(path).map_err(|e| sqlx::Error::Configuration(Box::new(e)))?;
-            }
+            Self::create_sqlite_file_if_needed(path)?;
         }
 
         // Connect to the SQLite database
         let pool = sqlx::SqlitePool::connect(database_url).await?;
         Ok(Self { pool })
+    }
+
+    fn create_sqlite_file_if_needed(path: &str) -> Result<(), std::io::Error> {
+        if let Some(parent) = Path::new(path).parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+
+        if !Path::new(path).exists() {
+            fs::File::create(path)?;
+        }
+
+        Ok(())
     }
 }
 

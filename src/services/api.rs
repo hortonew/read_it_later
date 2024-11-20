@@ -190,20 +190,7 @@ async fn snippets_page(
 
     match result {
         Ok(snippets_with_tags) => {
-            // Sanitize data
-            let sanitized_snippets: Vec<_> = snippets_with_tags
-                .into_iter()
-                .map(|snippet_with_tags| models::SnippetWithTags {
-                    id: snippet_with_tags.id,
-                    snippet: sanitize_with_allowed_tags(&snippet_with_tags.snippet).to_string(),
-                    url: sanitize_with_allowed_tags(&snippet_with_tags.url).to_string(),
-                    tags: snippet_with_tags
-                        .tags
-                        .into_iter()
-                        .map(|tag| sanitize_with_allowed_tags(&tag).to_string())
-                        .collect(),
-                })
-                .collect();
+            let sanitized_snippets = sanitize_snippets(snippets_with_tags);
 
             let mut context = Context::new();
             context.insert("snippets_with_tags", &sanitized_snippets);
@@ -223,6 +210,22 @@ async fn snippets_page(
             HttpResponse::InternalServerError().body("Failed to fetch snippets with tags")
         }
     }
+}
+
+fn sanitize_snippets(snippets_with_tags: Vec<models::SnippetWithTags>) -> Vec<models::SnippetWithTags> {
+    snippets_with_tags
+        .into_iter()
+        .map(|snippet_with_tags| models::SnippetWithTags {
+            id: snippet_with_tags.id,
+            snippet: sanitize_with_allowed_tags(&snippet_with_tags.snippet).to_string(),
+            url: sanitize_with_allowed_tags(&snippet_with_tags.url).to_string(),
+            tags: snippet_with_tags
+                .tags
+                .into_iter()
+                .map(|tag| sanitize_with_allowed_tags(&tag).to_string())
+                .collect(),
+        })
+        .collect()
 }
 
 #[post("/snippets")]

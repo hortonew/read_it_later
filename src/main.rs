@@ -34,6 +34,7 @@ async fn main() -> std::io::Result<()> {
     };
 
     println!("Database: {}, {}", database_type, database_url);
+    println!("Listening on: http://localhost:{}", port);
 
     // Initialize DB pool
     database.initialize().await.expect("Failed to initialize database");
