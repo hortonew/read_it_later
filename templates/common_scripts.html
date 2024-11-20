@@ -1,0 +1,56 @@
+<script>
+    async function submitDeleteUrl(event, url) {
+        event.preventDefault();
+        event.stopPropagation(); // Prevent toggle when clicking delete
+        try {
+            const response = await fetch('/urls/delete/by-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to delete URL');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred while deleting the URL');
+        }
+    }
+
+    async function submitDeleteSnippet(event, snippetId) {
+        event.preventDefault();
+        event.stopPropagation(); // Prevent toggle when clicking delete
+        try {
+            const response = await fetch('/snippets/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: snippetId })
+            });
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to delete snippet');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred while deleting the snippet');
+        }
+    }
+
+    // Toggle dark mode
+    function toggleDarkMode() {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('dark-mode', document.body.classList.contains('dark-mode'));
+    }
+
+    // Set dark mode based on local storage
+    document.addEventListener('DOMContentLoaded', () => {
+        if (localStorage.getItem('dark-mode') === 'true') {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+    });
+</script>

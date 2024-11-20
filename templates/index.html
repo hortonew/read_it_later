@@ -5,26 +5,7 @@
     <!-- <meta http-equiv="refresh" content="3"> -->
     <meta charset="UTF-8">
     {% include 'css.html' %}
-    <script>
-        async function submitDeleteUrl(event, url) {
-            event.preventDefault();
-            try {
-                const response = await fetch('/urls/delete/by-url', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
-                });
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    alert('Failed to delete URL');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while deleting the URL');
-            }
-        }
-    </script>
+    {% include 'common_scripts.html' %}
 </head>
 <body class="bg-gray-100 text-gray-900 dark-mode">
     {% include 'nav.html' %}

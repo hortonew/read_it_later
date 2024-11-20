@@ -6,6 +6,7 @@
     <!-- <meta http-equiv="refresh" content="3"> -->
     <meta charset="UTF-8">
     {% include 'css.html' %}
+    {% include 'common_scripts.html' %}
     <script>
         const EXPAND_THRESHOLD = 5; // Number of tags to determine if they should be expanded by default
         let allExpanded = localStorage.getItem("allExpanded") === "true"; // Retrieve persisted state
@@ -68,48 +69,6 @@
             const button = document.getElementById('toggleTagsButton');
             button.textContent = allExpanded ? 'Collapse All' : 'Expand All';
         });
-
-        // Function to delete a URL
-        async function submitDeleteUrl(event, url) {
-            event.preventDefault();
-            event.stopPropagation(); // Prevent toggle when clicking delete
-            try {
-                const response = await fetch('/urls/delete/by-url', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
-                });
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    alert('Failed to delete URL');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while deleting the URL');
-            }
-        }
-
-        // Function to delete a snippet
-        async function submitDeleteSnippet(event, snippetId) {
-            event.preventDefault();
-            event.stopPropagation(); // Prevent toggle when clicking delete
-            try {
-                const response = await fetch('/snippets/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: snippetId })
-                });
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    alert('Failed to delete snippet');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while deleting the snippet');
-            }
-        }
 
         // Function to toggle all tag sections
         function toggleAllTags() {
